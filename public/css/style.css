@@ -1,0 +1,142 @@
+/* Общие стили для всех страниц */
+body {
+    background-color: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+/* Навбар */
+.navbar {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 10px 0;
+}
+
+.navbar-brand {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.auth-btn {
+    margin-right: 30px;
+}
+
+.auth-btn .btn {
+    background-color: #0d6efd !important; /* Синий цвет кнопки */
+    color: white !important; /* Белый текст */
+    border: none !important; /* Убираем границу */
+    padding: 8px 20px; /* Отступы внутри кнопки */
+    border-radius: 5px; /* Скругление углов */
+    transition: background-color 0.3s ease, color 0.3s ease; /* Плавный переход */
+}
+
+.auth-btn .btn:hover {
+    background-color: white !important; /* Белый цвет при наведении */
+    color: #0d6efd !important; /* Синий текст при наведении */
+    border: 1px solid #0d6efd !important; /* Синяя рамка при наведении */
+}
+
+/* Стили для карточек курсов */
+.course-card {
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.course-card .card-body {
+    padding: 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.course-card h5 {
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin: 0 0 10px 0; /* Уменьшен отступ снизу */
+}
+
+.course-card p {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin: 0 0 10px 0; /* Уменьшен отступ снизу */
+}
+
+.course-card .btn {
+    width: 100%;
+    margin-top: auto; /* Кнопка прижимается к низу карточки */
+}
+
+/* Стили для форм авторизации и регистрации */
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-top: 20px;
+}
+
+.card-body {
+    padding: 2rem;
+}
+
+.form-label {
+    font-weight: bold;
+}
+
+.form-control {
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+}
+
+/* Футер */
+.footer {
+    background-color: #f8f9fa;
+    padding: 20px 0;
+    margin-top: auto;
+    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.footer a {
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .auth-btn {
+        margin-right: 10px;
+    }
+
+    .navbar-brand {
+        position: static;
+        transform: none;
+        text-align: center;
+        width: 100%;
+    }
+}
