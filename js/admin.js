@@ -250,6 +250,8 @@ document.getElementById('lessonForm').addEventListener('submit', async (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Инициализируем модальные окна
+    courseModal = new bootstrap.Modal(document.getElementById('courseModal'));
     lessonsModal = new bootstrap.Modal(document.getElementById('lessonsModal'));
 
     // Добавляем обработчик формы добавления/редактирования курса
@@ -360,14 +362,18 @@ async function checkAdminAuth() {
     }
 }
 
-async function editCourse(id) {
-    const response = await Api.request('get_course', { id });
-    if (response.status === 'success') {
+async function ш(id) {
+    const response = await Api.request('get_course_details', { id });
+    if (response.status === 'success' && response.course) {
         document.getElementById('courseModalTitle').textContent = 'Редактировать курс';
         document.getElementById('courseId').value = response.course.id;
         document.getElementById('courseTitle').value = response.course.title;
         document.getElementById('courseDescription').value = response.course.description;
-        courseModal.show();
+        
+        // Используем существующий экземпляр модального окна
+        const modalElement = document.getElementById('courseModal');
+        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        modal.show();
     } else {
         alert(response.message || 'Ошибка при загрузке курса');
     }

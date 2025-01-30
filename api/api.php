@@ -97,6 +97,15 @@ switch($action) {
     case 'get_material':
         getMaterial($pdo);
         break;
+    case 'get_user_profile':
+        getUserProfile($pdo);
+        break;
+    case 'update_avatar':
+        updateAvatar($pdo);
+        break;
+    case 'update_password':
+        updatePassword($pdo);
+        break;
     default:
         echo json_encode(['status' => 'error', 'message' => 'Неизвестное действие']);
 }
@@ -397,6 +406,11 @@ function getCourse($pdo) {
 }
 
 function getCourseDetails($pdo) {
+    if (!isset($_POST['id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'ID курса не указан']);
+        return;
+    }
+    
     $id = sanitize($_POST['id']);
     
     try {
@@ -409,18 +423,10 @@ function getCourseDetails($pdo) {
             echo json_encode(['status' => 'error', 'message' => 'Курс не найден']);
             return;
         }
-        
-        // Получаем уроки курса и их статус для текущего пользователя
-        $stmt = $pdo->prepare("
-            SELECT l.*, 
-            COALESCE(ul.completed, 0) as completed
-            FROM lessons l
-            LEFT JOIN user_lessons ul ON l.id = ul.lesson_id 
-                AND ul.user_id = ? AND ul.course_id = ?
-            WHERE l.course_id = ?
-            ORDER BY l.order_num ASC
-        ");
-        $stmt->execute([$_SESSION['user_id'], $id, $id]);
+
+        // Получаем уроки курса
+        $stmt = $pdo->prepare("SELECT * FROM lessons WHERE course_id = ? ORDER BY order_num ASC");
+        $stmt->execute([$id]);
         $lessons = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode([
@@ -430,7 +436,7 @@ function getCourseDetails($pdo) {
         ]);
     } catch(PDOException $e) {
         echo json_encode([
-            'status' => 'error',
+            'status' => 'error', 
             'message' => 'Ошибка при получении данных курса: ' . $e->getMessage()
         ]);
     }
@@ -823,6 +829,140 @@ function getMaterial($pdo) {
             'status' => 'error',
             'message' => 'Ошибка при получении материала'
         ]);
+    }
+}
+
+function getUserProfile($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT email, avatar FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user) {
+            echo json_encode([
+                'status' => 'success',
+                'email' => $user['email'],
+                'avatar' => $user['avatar']
+            ]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Пользователь не найден']);
+        }
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка базы данных']);
+    }
+}
+
+function updateAvatar($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    // Отладочная информация
+    error_log('FILES: ' . print_r($_FILES, true));
+    
+    if (!isset($_FILES['avatar'])) {
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Файл не найден в запросе'
+        ]);
+        return;
+    }
+
+    if ($_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
+        $errorMessage = 'Ошибка загрузки файла: ';
+        switch ($_FILES['avatar']['error']) {
+            case UPLOAD_ERR_INI_SIZE:
+                $errorMessage .= 'Превышен размер файла (php.ini)';
+                break;
+            case UPLOAD_ERR_FORM_SIZE:
+                $errorMessage .= 'Превышен размер файла (HTML форма)';
+                break;
+            case UPLOAD_ERR_PARTIAL:
+                $errorMessage .= 'Файл загружен частично';
+                break;
+            case UPLOAD_ERR_NO_FILE:
+                $errorMessage .= 'Файл не был загружен';
+                break;
+            default:
+                $errorMessage .= 'Код ошибки: ' . $_FILES['avatar']['error'];
+        }
+        echo json_encode(['status' => 'error', 'message' => $errorMessage]);
+        return;
+    }
+
+    try {
+        $file = $_FILES['avatar'];
+        $fileName = uniqid() . '_' . basename($file['name']);
+        $uploadDir = '../uploads/avatars/';
+        $uploadPath = $uploadDir . $fileName;
+
+        // Проверяем и создаем директорию
+        if (!file_exists($uploadDir)) {
+            if (!mkdir($uploadDir, 0777, true)) {
+                throw new Exception('Не удалось создать директорию для загрузки');
+            }
+        }
+
+        // Проверяем права доступа
+        if (!is_writable($uploadDir)) {
+            throw new Exception('Нет прав на запись в директорию загрузки');
+        }
+
+        if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
+            $avatarUrl = 'uploads/avatars/' . $fileName;
+            $stmt = $pdo->prepare("UPDATE users SET avatar = ? WHERE id = ?");
+            $stmt->execute([$avatarUrl, $_SESSION['user_id']]);
+
+            echo json_encode([
+                'status' => 'success',
+                'avatar_url' => $avatarUrl
+            ]);
+        } else {
+            throw new Exception('Не удалось переместить загруженный файл');
+        }
+    } catch(Exception $e) {
+        error_log('Avatar upload error: ' . $e->getMessage());
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Ошибка при сохранении файла: ' . $e->getMessage()
+        ]);
+    }
+}
+
+function updatePassword($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    $currentPassword = $_POST['current_password'];
+    $newPassword = $_POST['new_password'];
+
+    try {
+        // Проверяем текущий пароль
+        $stmt = $pdo->prepare("SELECT password FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!password_verify($currentPassword, $user['password'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Неверный текущий пароль']);
+            return;
+        }
+
+        // Обновляем пароль
+        $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+        $stmt->execute([$hashedPassword, $_SESSION['user_id']]);
+
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка базы данных']);
     }
 }
 ?> 

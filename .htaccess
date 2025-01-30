@@ -1,0 +1,14 @@
+RewriteEngine On
+RewriteBase /jajacourse/
+
+# Разрешаем доступ к api.php
+<Files "api.php">
+    Order Allow,Deny
+    Allow from all
+</Files>
+
+# Защищаем системные файлы
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch> 

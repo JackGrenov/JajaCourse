@@ -1,13 +1,20 @@
 class Api {
     static async request(action, data = {}) {
         try {
-            const formData = new FormData();
-            formData.append('action', action);
-
-            // Добавляем все переданные данные в FormData
-            Object.keys(data).forEach(key => {
-                formData.append(key, data[key]);
-            });
+            let formData;
+            
+            // Проверяем, является ли data экземпляром FormData
+            if (data instanceof FormData) {
+                formData = data;
+                formData.append('action', action);
+            } else {
+                formData = new FormData();
+                formData.append('action', action);
+                // Добавляем все переданные данные в FormData
+                Object.keys(data).forEach(key => {
+                    formData.append(key, data[key]);
+                });
+            }
 
             const response = await fetch('../api/api.php', {
                 method: 'POST',
@@ -116,5 +123,17 @@ class Api {
 
     static async deleteMaterial(id) {
         return await this.request('delete_material', { id });
+    }
+
+    static async getUserProfile() {
+        return await this.request('get_user_profile');
+    }
+
+    static async updateAvatar(formData) {
+        return await this.request('update_avatar', formData);
+    }
+
+    static async updatePassword(data) {
+        return await this.request('update_password', data);
     }
 } 
