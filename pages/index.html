@@ -22,7 +22,10 @@
                         <a class="nav-link active" href="index.html">Главная</a>
                     </li>
                     <li class="nav-item" id="chatLinkContainer">
-                        <a class="nav-link active" href="#" id="chatLink">Чат</a>
+                        <a class="nav-link active position-relative" href="#" id="chatLink">
+                            Чат
+                            <span id="unreadBadge" class="notification-badge d-none">0</span>
+                        </a>
                     </li>
                     <li class="nav-item" id="profileLinkContainer">
                         <a class="nav-link active" href="profile.html">Профиль</a>
@@ -44,23 +47,37 @@
 
     <!-- Модальное окно чата -->
     <div class="modal fade" id="chatModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Чат с преподавателем</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="chat-messages" id="chatMessages">
-                        <!-- Сообщения будут добавляться динамически -->
+                    <!-- Контейнер для выбора администратора -->
+                    <div id="adminSelection" class="row row-cols-1 row-cols-md-2 g-4 mb-4">
+                        <!-- Карточки администраторов будут добавлены динамически -->
                     </div>
-                    <form id="chatForm" class="mt-3" style="display: block;">
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="messageInput"
-                                placeholder="Введите сообщение...">
-                            <button class="btn btn-primary" type="submit">Отправить</button>
+
+                    <!-- Чат будет показан после выбора администратора -->
+                    <div id="chatContainer" class="d-none">
+                        <div class="d-flex align-items-center mb-3">
+                            <button class="btn btn-outline-secondary btn-sm me-3" id="backToAdmins">
+                                <i class="fas fa-arrow-left"></i> Назад к выбору преподавателя
+                            </button>
+                            <h6 class="mb-0">Чат с: <span id="selectedAdminName"></span></h6>
                         </div>
-                    </form>
+                        <div class="chat-messages" id="chatMessages">
+                            <!-- Сообщения будут добавляться динамически -->
+                        </div>
+                        <form id="chatForm" class="mt-3">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="messageInput"
+                                    placeholder="Введите сообщение...">
+                                <button class="btn btn-primary" type="submit">Отправить</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -71,33 +88,101 @@
     <script>
         let lastMessageId = 0;
         let chatInterval;
+        let selectedAdminId = null;
+        let adminsUpdateInterval;
 
-        // Функция для получения новых сообщений
+        // Функция для загрузки списка администраторов
+        async function loadAdmins() {
+            const response = await Api.request('get_admins');
+            if (response.status === 'success') {
+                const adminSelection = document.getElementById('adminSelection');
+                adminSelection.innerHTML = response.admins.map(admin => `
+                    <div class="col">
+                        <div class="card admin-card h-100" data-admin-id="${admin.id}" data-admin-email="${admin.email}">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="admin-avatar me-3 position-relative">
+                                        <i class="fas fa-user-tie fa-2x"></i>
+                                        ${admin.unread_count > 0 ? `
+                                            <span class="admin-notification-badge">
+                                                ${admin.unread_count}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                    <div>
+                                        <h5 class="card-title mb-1">${admin.email}</h5>
+                                        <p class="card-text text-muted mb-0">Преподаватель</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <button class="btn btn-primary w-100 ${admin.unread_count > 0 ? 'btn-notification' : ''}" 
+                                        onclick="selectAdmin(${admin.id}, '${admin.email}')">
+                                    ${admin.unread_count > 0 ? `
+                                        Непрочитанных: ${admin.unread_count}
+                                    ` : 'Начать чат'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Обработчик выбора администратора
+        async function selectAdmin(adminId, adminEmail) {
+            selectedAdminId = adminId;
+
+            // Обновляем имя выбранного администратора
+            document.getElementById('selectedAdminName').textContent = adminEmail;
+
+            // Скрываем список администраторов и показываем чат
+            document.getElementById('adminSelection').classList.add('d-none');
+            document.getElementById('chatContainer').classList.remove('d-none');
+
+            // Загружаем сообщения
+            await getMessages();
+
+            // Отмечаем сообщения как прочитанные
+            await Api.request('mark_messages_as_read');
+            updateUnreadMessagesCount();
+        }
+
+        // Обновляем функцию получения сообщений
         async function getMessages() {
-            const response = await Api.getMessages();
+            if (!selectedAdminId) return;
+
+            const response = await Api.request('get_messages', { admin_id: selectedAdminId });
             if (response.status === 'success') {
                 const chatMessages = document.getElementById('chatMessages');
                 chatMessages.innerHTML = response.messages.map(msg => `
                     <div class="message ${msg.ot === 'admin' ? 'message-admin' : 'message-user'}">
                         <div class="message-header">
-                            <strong>${msg.ot === 'admin' ? 'Преподаватель' : 'Вы'}</strong>
+                            <strong>${msg.ot === 'admin' ? msg.admin_email : 'Вы'}</strong>
                             <small class="text-muted">${new Date(msg.created_at).toLocaleString()}</small>
                         </div>
                         <div class="message-text">${msg.message}</div>
                     </div>
                 `).join('');
                 chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                // Отмечаем сообщения как прочитанные и обновляем счетчик
+                await Api.request('mark_messages_as_read');
+                updateUnreadMessagesCount();
             }
         }
 
-        // Обработчик отправки сообщения
+        // Обновляем обработчик отправки сообщения
         document.getElementById('chatForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
 
-            if (message) {
-                const response = await Api.sendMessage(message);
+            if (message && selectedAdminId) {
+                const response = await Api.request('send_message', {
+                    message: message,
+                    admin_id: selectedAdminId
+                });
                 if (response.status === 'success') {
                     input.value = '';
                     await getMessages();
@@ -107,18 +192,53 @@
             }
         });
 
-        // Добавим обработчики для модального окна чата
-        document.getElementById('chatLink').addEventListener('click', function () {
+        // Обновляем обработчик открытия чата
+        document.getElementById('chatLink').addEventListener('click', async function () {
             const chatModal = new bootstrap.Modal(document.getElementById('chatModal'));
-            document.getElementById('chatForm').style.display = 'block';
+            // Сбрасываем выбранного админа
+            selectedAdminId = null;
+
+            // Показываем список администраторов и скрываем чат
+            document.getElementById('adminSelection').classList.remove('d-none');
+            document.getElementById('chatContainer').classList.add('d-none');
+
+            // Очищаем чат
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('messageInput').value = '';
+
+            // Загружаем список администраторов
+            await loadAdmins();
+
+            // Показываем модальное окно
             chatModal.show();
-            getMessages();
-            // Запускаем периодическую проверку новых сообщений
-            chatInterval = setInterval(getMessages, 3000);
         });
 
+        // Добавляем обработчик кнопки "Назад"
+        document.getElementById('backToAdmins').addEventListener('click', function () {
+            // Скрываем чат и показываем список администраторов
+            document.getElementById('chatContainer').classList.add('d-none');
+            document.getElementById('adminSelection').classList.remove('d-none');
+
+            // Сбрасываем выбранного администратора
+            selectedAdminId = null;
+
+            // Очищаем чат
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('messageInput').value = '';
+        });
+
+        // Обновляем обработчик закрытия модального окна
         document.getElementById('chatModal').addEventListener('hidden.bs.modal', function () {
-            // При закрытии чата останавливаем проверку сообщений
+            // Очищаем при закрытии
+            selectedAdminId = null;
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('messageInput').value = '';
+
+            // Возвращаем к списку администраторов
+            document.getElementById('chatContainer').classList.add('d-none');
+            document.getElementById('adminSelection').classList.remove('d-none');
+
+            // Останавливаем интервал обновления сообщений
             if (chatInterval) {
                 clearInterval(chatInterval);
                 chatInterval = null;
@@ -151,26 +271,39 @@
         // Загрузка курсов
         async function loadCourses() {
             const response = await Api.request('get_courses');
+            const authResponse = await Api.request('check_auth');
+            const isAdmin = authResponse.status === 'success' && authResponse.role === 'admin';
+
+            let groupResponse = { group: null };
+            if (!isAdmin) {
+                groupResponse = await Api.request('get_user_group');
+            }
+
             if (response.status === 'success') {
                 const coursesList = document.getElementById('coursesList');
-                coursesList.innerHTML = response.courses.map(course => `
+                coursesList.innerHTML = response.courses.map(course => {
+                    const isBlocked = !isAdmin && !groupResponse.group; // Блокируем только для обычных пользователей без группы
+                    return `
                     <div class="col-12 col-sm-6 col-lg-4 mb-4">
                         <div class="card h-100">
-                            <div class="card-body">
+                            <div class="card-body d-flex flex-column">
                                 <h5 class="card-title">${course.title}</h5>
-                                <p class="card-text flex-grow-1">${course.description}</p>
-                                <div class="progress mb-3">
+                                <p class="card-text">${course.description}</p>
+                                <div class="progress mb-3 ${isBlocked ? 'disabled' : ''}" ${isBlocked ? 'style="opacity: 0.5; pointer-events: none;"' : ''}>
                                     <div class="progress-bar" role="progressbar" style="width: ${course.progress}%">
                                         ${course.progress}%
                                     </div>
                                 </div>
-                                <button class="btn btn-primary w-100" onclick="window.location.href='course.html?id=${course.id}'">
-                                    Начать обучение
-                                </button>
+                                ${isBlocked ?
+                            `<div class="alert alert-warning mb-0 mt-auto w-100">Курс заблокирован. Обратитесь к администратору для добавления в группу.</div>` :
+                            `<button class="btn btn-primary w-100 mt-auto" onclick="window.location.href='course.html?id=${course.id}'">
+                                        Начать обучение
+                                    </button>`
+                        }
                             </div>
                         </div>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             }
         }
 
@@ -185,7 +318,21 @@
 
         // Инициализация
         checkAuth();
+
+        document.getElementById('chatModal').addEventListener('show.bs.modal', function () {
+            // Обновляем список администраторов каждые 30 секунд
+            adminsUpdateInterval = setInterval(loadAdmins, 30000);
+        });
+
+        document.getElementById('chatModal').addEventListener('hidden.bs.modal', function () {
+            // Очищаем интервал при закрытии модального окна
+            if (adminsUpdateInterval) {
+                clearInterval(adminsUpdateInterval);
+                adminsUpdateInterval = null;
+            }
+        });
     </script>
+    <script src="../js/notifications.js"></script>
 </body>
 
 </html>
