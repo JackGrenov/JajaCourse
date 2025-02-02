@@ -6,7 +6,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
     const response = await Api.login(email, password);
     if (response.status === 'success') {
-        window.location.href = 'index.html';
+        // Сохраняем роль пользователя в localStorage для дополнительной проверки
+        localStorage.setItem('userRole', response.role);
+        window.location.href = response.role === 'admin' ? 'admin.html' : 'index.html';
     } else {
         alert(response.message);
     }

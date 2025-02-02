@@ -10,6 +10,20 @@ async function loadCourse() {
         return;
     }
 
+    // Проверяем роль пользователя
+    const authResponse = await Api.request('check_auth');
+    const isAdmin = authResponse.status === 'success' && authResponse.role === 'admin';
+
+    if (!isAdmin) {
+        // Проверяем принадлежность к группе только для обычных пользователей
+        const groupResponse = await Api.request('get_user_group');
+        if (!groupResponse.group) {
+            alert('У вас нет доступа к этому курсу. Обратитесь к администратору для добавления в группу.');
+            window.location.href = 'index.html';
+            return;
+        }
+    }
+
     const response = await Api.getCourseDetails(currentCourseId);
     if (response.status === 'success') {
         // Отображаем список уроков

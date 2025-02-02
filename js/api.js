@@ -1,30 +1,24 @@
 class Api {
+    static BASE_URL = '../api/api.php';
+
     static async request(action, data = {}) {
         try {
-            let formData;
-            
-            // Проверяем, является ли data экземпляром FormData
-            if (data instanceof FormData) {
-                formData = data;
-                formData.append('action', action);
-            } else {
-                formData = new FormData();
-                formData.append('action', action);
-                // Добавляем все переданные данные в FormData
-                Object.keys(data).forEach(key => {
-                    formData.append(key, data[key]);
-                });
-            }
+            const formData = new FormData();
+            formData.append('action', action);
 
-            const response = await fetch('../api/api.php', {
+            Object.entries(data).forEach(([key, value]) => {
+                formData.append(key, value);
+            });
+
+            const response = await fetch(this.BASE_URL, {
                 method: 'POST',
                 body: formData
             });
 
             return await response.json();
         } catch (error) {
-            console.error('API Error:', error);
-            return { status: 'error', message: 'Ошибка сервера' };
+            console.error(`API Error (${action}):`, error);
+            return { status: 'error', message: 'Ошибка сети' };
         }
     }
 
@@ -33,7 +27,11 @@ class Api {
     }
 
     static async login(email, password) {
-        return await this.request('login', { email, password });
+        const response = await this.request('login', { email, password });
+        if (response.status === 'success') {
+            localStorage.setItem('userRole', response.role);
+        }
+        return response;
     }
 
     static async getProgress(courseId) {
@@ -41,6 +39,7 @@ class Api {
     }
 
     static async logout() {
+        localStorage.removeItem('userRole');
         return await this.request('logout');
     }
 
@@ -135,5 +134,80 @@ class Api {
 
     static async updatePassword(data) {
         return await this.request('update_password', data);
+    }
+
+    static isAdmin() {
+        return localStorage.getItem('userRole') === 'admin';
+    }
+
+    static async getGrades() {
+        return this.request('get_grades');
+    }
+
+    static async setGrade(userId, lessonId, grade) {
+        const response = await this.request('set_grade', {
+            user_id: userId,
+            lesson_id: lessonId,
+            grade: grade
+        });
+
+        if (response.status === 'success') {
+            // Обновляем все списки оценок
+            await Promise.all([
+                this.updateGradesTable(),
+                loadGrades(),
+                loadAverageGrades(),
+                loadGroupAverageGrades()
+            ]);
+        }
+
+        return response;
+    }
+
+    static async updateGradesTable() {
+        const gradesResponse = await this.request('get_grades');
+        if (gradesResponse.status === 'success') {
+            const gradesTable = document.getElementById('gradesTable');
+            if (gradesTable) {
+                gradesTable.innerHTML = gradesResponse.grades.map(grade => `
+                    <tr>
+                        <td>${grade.user_email}</td>
+                        <td>${grade.course_title}</td>
+                        <td>${grade.lesson_title}</td>
+                        <td>
+                            <input type="number" 
+                                   class="form-control grade-input" 
+                                   value="${grade.grade}" 
+                                   min="0" 
+                                   max="5" 
+                                   step="0.1"
+                                   data-user-id="${grade.user_id}"
+                                   data-lesson-id="${grade.lesson_id}"
+                                   onchange="updateGrade(this)">
+                        </td>
+                        <td>${new Date(grade.created_at).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+    }
+
+    static async getGroups() {
+        return this.request('get_groups');
+    }
+
+    static async createGroup(name, userIds) {
+        return this.request('create_group', {
+            name,
+            user_ids: JSON.stringify(userIds)
+        });
+    }
+
+    static async getUnreadMessagesCount() {
+        return this.request('get_unread_messages_count');
+    }
+
+    static async markMessagesAsRead() {
+        return this.request('mark_messages_as_read');
     }
 } 

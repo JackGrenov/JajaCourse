@@ -25,13 +25,13 @@ CREATE TABLE user_progress (
 
 CREATE TABLE grades (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT,
-    course_id INT,
-    grade INT,
-    comment TEXT,
+    user_id INT NOT NULL,
+    lesson_id INT NOT NULL,
+    grade DECIMAL(2,1) NOT NULL CHECK (grade >= 0 AND grade <= 5),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+    CONSTRAINT unique_user_lesson UNIQUE (user_id, lesson_id)
 );
 
 CREATE TABLE lessons (
@@ -60,11 +60,13 @@ DROP TABLE IF EXISTS chat_messages;
 CREATE TABLE chat_messages (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT,
-    admin_id INT,
     message TEXT,
+    ot ENUM('user', 'admin') DEFAULT 'user',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    selected_admin_id INT,
+    is_read BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (selected_admin_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE lesson_materials (
@@ -102,13 +104,13 @@ INSERT INTO user_progress (user_id, course_id, progress) VALUES
 (4, 4, 60);
 
 -- Добавление оценок
-INSERT INTO grades (user_id, course_id, grade, comment) VALUES
-(2, 1, 85, 'Отличная работа!'),
-(2, 2, 70, 'Нужно больше практики'),
-(3, 1, 95, 'Превосходно'),
-(3, 3, 75, 'Хороший результат'),
-(4, 2, 65, 'Требуется улучшение'),
-(4, 4, 80, 'Очень хорошо');
+INSERT INTO grades (user_id, lesson_id, grade) VALUES
+(2, 1, 4.5),
+(2, 2, 3.5),
+(3, 1, 5.0),
+(3, 3, 4.0),
+(4, 2, 3.0),
+(4, 4, 4.5);
 
 -- Добавление тестовых уроков для курса "Введение в программирование"
 INSERT INTO lessons (course_id, title, content, order_num) VALUES
@@ -195,4 +197,143 @@ ADD FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 -- Обновляем таблицу chat_messages для admin_id
 ALTER TABLE chat_messages
 DROP FOREIGN KEY chat_messages_ibfk_2,
-ADD FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE; 
+ADD FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE;
+
+-- Таблица групп
+CREATE TABLE groups (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица связи пользователей и групп
+CREATE TABLE user_groups (
+    user_id INT,
+    group_id INT,
+    PRIMARY KEY (user_id, group_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+);
+
+-- Используем внешние ключи и индексы
+ALTER TABLE grades
+ADD INDEX idx_user_lesson (user_id, lesson_id),
+ADD INDEX idx_lesson_grade (lesson_id, grade);
+
+-- Добавляем метаданные
+ALTER TABLE grades
+ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ADD COLUMN created_by INT,
+ADD FOREIGN KEY (created_by) REFERENCES users(id);
+
+-- Создаем таблицу статистики пользователей
+CREATE TABLE user_statistics (
+    user_id INT PRIMARY KEY,
+    average_grade DECIMAL(3,2) DEFAULT 0,
+    total_grades INT DEFAULT 0,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Удаляем существующие триггеры
+DROP TRIGGER IF EXISTS update_user_average_grade;
+DROP TRIGGER IF EXISTS update_user_average_grade_on_update;
+DROP TRIGGER IF EXISTS update_user_average_grade_on_delete;
+
+-- Создаем триггер для добавления оценки
+DELIMITER //
+CREATE TRIGGER update_user_average_grade
+AFTER INSERT ON grades
+FOR EACH ROW
+BEGIN
+    INSERT INTO user_statistics (user_id, average_grade, total_grades)
+    VALUES (NEW.user_id, 
+            (SELECT AVG(grade) FROM grades WHERE user_id = NEW.user_id),
+            (SELECT COUNT(*) FROM grades WHERE user_id = NEW.user_id))
+    ON DUPLICATE KEY UPDATE
+        average_grade = (SELECT AVG(grade) FROM grades WHERE user_id = NEW.user_id),
+        total_grades = (SELECT COUNT(*) FROM grades WHERE user_id = NEW.user_id);
+END//
+DELIMITER ;
+
+-- Создаем триггер для обновления оценки
+DELIMITER //
+CREATE TRIGGER update_user_average_grade_on_update
+AFTER UPDATE ON grades
+FOR EACH ROW
+BEGIN
+    UPDATE user_statistics 
+    SET average_grade = (SELECT AVG(grade) FROM grades WHERE user_id = NEW.user_id),
+        total_grades = (SELECT COUNT(*) FROM grades WHERE user_id = NEW.user_id)
+    WHERE user_id = NEW.user_id;
+END//
+DELIMITER ;
+
+-- Создаем триггер для удаления оценки
+DELIMITER //
+CREATE TRIGGER update_user_average_grade_on_delete
+AFTER DELETE ON grades
+FOR EACH ROW
+BEGIN
+    UPDATE user_statistics 
+    SET average_grade = COALESCE((SELECT AVG(grade) FROM grades WHERE user_id = OLD.user_id), 0),
+        total_grades = (SELECT COUNT(*) FROM grades WHERE user_id = OLD.user_id)
+    WHERE user_id = OLD.user_id;
+END//
+DELIMITER ;
+
+-- Заполняем начальными данными
+INSERT INTO user_statistics (user_id, average_grade, total_grades)
+SELECT 
+    user_id,
+    AVG(grade) as average_grade,
+    COUNT(*) as total_grades
+FROM grades
+GROUP BY user_id
+ON DUPLICATE KEY UPDATE
+    average_grade = VALUES(average_grade),
+    total_grades = VALUES(total_grades);
+
+-- Проверим, что поле is_read существует в таблице chat_messages
+ALTER TABLE chat_messages
+ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+
+-- Добавим индекс для быстрого поиска непрочитанных сообщений
+CREATE INDEX IF NOT EXISTS idx_unread_messages ON chat_messages(user_id, is_read, ot);
+
+-- Проверим структуру таблицы grades
+DESCRIBE grades;
+
+-- Если нужно, обновим структуру:
+-- Обновляем структуру таблицы grades
+-- Сначала удалим существующие ограничения, если они есть
+ALTER TABLE grades
+    DROP CONSTRAINT IF EXISTS unique_user_lesson,
+    DROP CONSTRAINT IF EXISTS fk_grades_user,
+    DROP CONSTRAINT IF EXISTS fk_grades_lesson,
+    DROP CONSTRAINT IF EXISTS fk_grades_created_by;
+
+-- Обновляем типы колонок
+ALTER TABLE grades
+    MODIFY COLUMN grade DECIMAL(2,1) NOT NULL,
+    ADD CONSTRAINT check_grade CHECK (grade >= 0 AND grade <= 5);
+
+ALTER TABLE grades
+    MODIFY COLUMN user_id INT NOT NULL,
+    MODIFY COLUMN lesson_id INT NOT NULL;
+
+-- Добавляем новые колонки
+ALTER TABLE grades
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS created_by INT;
+
+-- Добавляем ограничения
+ALTER TABLE grades
+    ADD CONSTRAINT fk_grades_user 
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_grades_lesson 
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+    ADD CONSTRAINT unique_user_lesson 
+        UNIQUE (user_id, lesson_id),
+    ADD CONSTRAINT fk_grades_created_by 
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL; 

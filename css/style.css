@@ -1,30 +1,106 @@
+/* Основные стили */
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
+    --transition-default: all 0.3s ease;
+}
+
+/* Общие компоненты */
+.card {
+    transition: var(--transition-default);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-sm);
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn {
+    transition: var(--transition-default);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+/* Модули */
+/* Чат */
+.chat-module {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
 .chat-messages {
-    height: 400px;
+    height: 500px;
+    min-height: 500px;
+    max-height: 500px;
     overflow-y: auto;
-    padding: 15px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    padding: 1rem;
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    margin-bottom: 15px;
+    margin-bottom: 1rem;
+}
+
+/* Оценки */
+.grades-module {
+    --grade-badge-size: 0.9rem;
+    --grade-spacing: 0.4em;
+}
+
+.grade-badge {
+    font-size: var(--grade-badge-size);
+    padding: var(--grade-spacing) 0.6em;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .chat-module {
+        width: 100%;
+        max-width: none;
+        padding: 0 1rem;
+    }
+
+    .chat-messages {
+        height: 500px;
+    }
+
+    .message {
+        width: 70%;
+    }
 }
 
 .message {
-    margin-bottom: 15px;
-    padding: 10px;
+    width: 70%;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
     border-radius: 8px;
     background: #fff;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
 }
 
 .message-user {
-    background: #f8f9fa;
-    margin-right: 20%;
+    margin-right: auto;
+    margin-left: 0;
+    background: var(--light-bg);
 }
 
 .message-admin {
-    background: #007bff;
+    margin-left: auto;
+    margin-right: 0;
+    background: var(--primary-color);
     color: white;
-    margin-left: 20%;
 }
 
 .message-admin .text-muted {
@@ -44,36 +120,36 @@
 
 /* Стили для формы чата */
 #chatForm {
-    display: block;
-    padding: 15px;
-    border-top: 1px solid #dee2e6;
+    width: 100%;
+    padding: 1rem;
     background: #fff;
+    border-top: 1px solid var(--border-color);
 }
 
 #chatForm .input-group {
-    margin-bottom: 0;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 .progress {
     height: 20px;
 }
 
-.card {
-    transition: transform 0.2s;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+.progress.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+.progress.disabled .progress-bar {
+    background-color: #6c757d;
 }
 
 .card-body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    padding: 1rem;
 }
 
 .card-text {
@@ -237,4 +313,401 @@
     margin: 0;
     color: #333;
     font-weight: 500;
+}
+
+/* Стили для выбора администратора */
+.admin-select {
+    margin-bottom: 15px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.admin-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Стили для списка пользователей в модальном окне */
+.user-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.form-check {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.form-check:last-child {
+    border-bottom: none;
+}
+
+.form-check:hover {
+    background-color: #f8f9fa;
+}
+
+/* Стили для списка участников группы */
+#groupUsersList .list-group-item {
+    transition: background-color 0.2s;
+}
+
+#groupUsersList .list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+#groupUsersList .btn-danger {
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+#groupUsersList .btn-danger:hover {
+    opacity: 1;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 576px) {
+    #groupUsersList .list-group-item {
+        padding: 0.5rem;
+    }
+
+    #groupUsersList .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+}
+
+/* Стили для модального окна управления участниками */
+.modal-lg {
+    max-width: 900px;
+}
+
+#userSearchInput {
+    margin-bottom: 1rem;
+}
+
+#groupUsersList,
+#availableUsersList {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.list-group-item {
+    transition: all 0.2s;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+.list-group-item .btn {
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.list-group-item:hover .btn {
+    opacity: 1;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .modal-lg {
+        margin: 0.5rem;
+    }
+
+    .col-md-6+.col-md-6 {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #dee2e6;
+    }
+}
+
+#courseGradesList {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#courseGradesList .badge {
+    font-size: 1rem;
+}
+
+.card-title {
+    margin-bottom: 1rem;
+}
+
+#selectedStudentGrades {
+    transition: all 0.3s ease;
+}
+
+#studentGradesSelect {
+    margin-bottom: 1rem;
+}
+
+.group-grades {
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 1rem;
+}
+
+.group-grades:last-child {
+    border-bottom: none;
+}
+
+.group-grades .badge {
+    font-size: 0.9rem;
+    padding: 0.4em 0.6em;
+}
+
+.group-grades .table {
+    margin-bottom: 0;
+}
+
+.group-grades h5 small {
+    font-size: 0.8em;
+}
+
+@media (max-width: 768px) {
+    .group-grades .table {
+        font-size: 0.9rem;
+    }
+}
+
+#selectedGroupGrades {
+    transition: all 0.3s ease;
+}
+
+#groupGradesSelect {
+    margin-bottom: 1rem;
+}
+
+#groupCoursesList {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#groupCoursesList .badge {
+    font-size: 0.9rem;
+    padding: 0.4em 0.6em;
+}
+
+#courseGrades {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#courseGrades .badge,
+#gradesTable .badge {
+    font-size: 0.9rem;
+    padding: 0.4em 0.6em;
+}
+
+.table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#overallGrade {
+    font-size: 1.1rem;
+    padding: 0.5em 0.8em;
+}
+
+/* Обновляем стили для карточки группы */
+.card-header h5.mb-0 {
+    font-size: 1.1rem;
+}
+
+#userGroupInfo {
+    padding: 0.75rem 0;
+}
+
+#userGroupInfo h6.card-title {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+#userGroupInfo p.card-text {
+    font-size: 0.9rem;
+    margin-bottom: 0;
+    color: var(--secondary-color);
+}
+
+#userGroupInfo p.text-muted {
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* Делаем карточку более компактной */
+.col-md-4 .card .card-header {
+    padding: 0.75rem 1rem;
+    background-color: var(--light-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.col-md-4 .card .card-header h5 {
+    font-size: 1rem;
+    margin: 0;
+    font-weight: 500;
+}
+
+.col-md-4 .card .card-body {
+    padding: 0.75rem 1rem;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .col-md-4 .card {
+        margin-bottom: 1rem;
+    }
+}
+
+/* Стили для уведомлений */
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: var(--danger-color);
+    color: white;
+    border-radius: 50%;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 2s infinite;
+    z-index: 1000;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.nav-link {
+    position: relative;
+}
+
+.btn.position-relative {
+    position: relative !important;
+    overflow: visible !important;
+}
+
+/* Стили для карточек администраторов */
+.admin-card {
+    cursor: pointer;
+    transition: var(--transition-default);
+}
+
+.admin-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+}
+
+.admin-avatar {
+    width: 48px;
+    height: 48px;
+    background-color: var(--light-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+}
+
+.modal-lg {
+    max-width: 800px;
+}
+
+#chatContainer {
+    transition: var(--transition-default);
+}
+
+#backToAdmins {
+    transition: var(--transition-default);
+}
+
+#backToAdmins:hover {
+    background-color: var(--light-bg);
+}
+
+.chat-messages {
+    height: 400px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1rem;
+    overflow-y: auto;
+    background-color: var(--light-bg);
+}
+
+.admin-notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: var(--danger-color);
+    color: white;
+    border-radius: 50%;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 2s infinite;
+}
+
+.btn-notification {
+    animation: pulse 2s infinite;
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.btn-notification:hover {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.admin-avatar {
+    position: relative;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.alert {
+    z-index: 1050;
+}
+
+.alert-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.alert-error {
+    background-color: var(--danger-color);
+    color: white;
 }

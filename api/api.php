@@ -106,6 +106,57 @@ switch($action) {
     case 'update_password':
         updatePassword($pdo);
         break;
+    case 'get_admins':
+        getAdmins($pdo);
+        break;
+    case 'create_group':
+        createGroup($pdo);
+        break;
+    case 'get_groups':
+        getGroups($pdo);
+        break;
+    case 'delete_group':
+        deleteGroup($pdo);
+        break;
+    case 'remove_user_from_group':
+        removeUserFromGroup($pdo);
+        break;
+    case 'add_user_to_group':
+        addUserToGroup($pdo);
+        break;
+    case 'update_group':
+        updateGroup($pdo);
+        break;
+    case 'get_grades':
+        getGrades($pdo);
+        break;
+    case 'set_grade':
+        setGrade($pdo);
+        break;
+    case 'get_average_grades':
+        getAverageGrades($pdo);
+        break;
+    case 'delete_grade':
+        deleteGrade($pdo);
+        break;
+    case 'get_group_average_grades':
+        getGroupAverageGrades($pdo);
+        break;
+    case 'get_user_grades':
+        getUserGrades($pdo);
+        break;
+    case 'get_user_group':
+        getUserGroup($pdo);
+        break;
+    case 'get_unread_messages_count':
+        getUnreadMessagesCount($pdo);
+        break;
+    case 'mark_messages_as_read':
+        markMessagesAsRead($pdo);
+        break;
+    case 'get_unread_messages_by_admin':
+        getUnreadMessagesByAdmin($pdo);
+        break;
     default:
         echo json_encode(['status' => 'error', 'message' => 'Неизвестное действие']);
 }
@@ -140,23 +191,29 @@ function register($pdo) {
 
 // Функция авторизации
 function login($pdo) {
-    global $pdo;
     $email = sanitize($_POST['email']);
     $password = $_POST['password'];
     
-    $stmt = $pdo->prepare("SELECT id, password, role FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['user_id'] = $user['id'];
-        echo json_encode([
-            'status' => 'success', 
-            'message' => 'Авторизация успешна',
-            'role' => $user['role']
-        ]);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Неверный email или пароль']);
+    try {
+        $stmt = $pdo->prepare("SELECT id, email, password, role FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user && password_verify($password, $user['password'])) {
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['email'] = $user['email'];
+            $_SESSION['role'] = $user['role'];
+            
+            echo json_encode([
+                'status' => 'success',
+                'user_id' => $user['id'],
+                'role' => $user['role']
+            ]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Неверный email или пароль']);
+        }
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при входе в систему']);
     }
 }
 
@@ -216,30 +273,21 @@ function getCourses($pdo) {
 }
 
 function checkAuth() {
-    global $pdo;
-    if (!isset($_SESSION['user_id'])) {
+    if (isset($_SESSION['user_id'])) {
         echo json_encode([
-            'status' => 'error',
-            'message' => 'Не авторизован'
+            'status' => 'success',
+            'user_id' => $_SESSION['user_id'],
+            'role' => $_SESSION['role']
         ]);
-        return;
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
     }
-
-    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    echo json_encode([
-        'status' => 'success',
-        'user_id' => $_SESSION['user_id'],
-        'role' => $user['role']
-    ]);
 }
 
 function logout() {
-    session_start();
+    session_unset();
     session_destroy();
-    echo json_encode(['status' => 'success', 'message' => 'Выход выполнен успешно']);
+    echo json_encode(['status' => 'success']);
 }
 
 function checkAdmin() {
@@ -510,61 +558,6 @@ function updateCourseProgress($pdo, $userId, $courseId) {
     $stmt->execute([$userId, $courseId, $progress, $progress]);
 }
 
-function getMessages($pdo) {
-    if (!isset($_SESSION['user_id'])) {
-        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
-        return;
-    }
-
-    $lastId = isset($_POST['last_id']) ? (int)$_POST['last_id'] : 0;
-    $userId = $_SESSION['user_id'];
-    
-    // Проверяем роль пользователя
-    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-    $stmt->execute([$userId]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    try {
-        if ($user['role'] === 'admin') {
-            // Для админа показываем переписку с конкретным студентом
-            $studentId = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
-            if (!$studentId) {
-                echo json_encode(['status' => 'error', 'message' => 'Не выбран студент']);
-                return;
-            }
-            
-            $stmt = $pdo->prepare("
-                SELECT m.*, u.email as username, m.ot
-                FROM chat_messages m 
-                JOIN users u ON m.user_id = u.id
-                WHERE m.user_id = ?
-                ORDER BY m.created_at ASC
-                LIMIT 50
-            ");
-            $stmt->execute([$studentId]);
-        } else {
-            // Для студента показываем его переписку
-            $stmt = $pdo->prepare("
-                SELECT m.*, u.email as username, m.ot
-                FROM chat_messages m 
-                JOIN users u ON m.user_id = u.id
-                WHERE m.user_id = ?
-                ORDER BY m.created_at ASC
-                LIMIT 50
-            ");
-            $stmt->execute([$userId]);
-        }
-        
-        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode([
-            'status' => 'success',
-            'messages' => $messages
-        ]);
-    } catch(PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении сообщений']);
-    }
-}
-
 function sendMessage($pdo) {
     if (!isset($_SESSION['user_id'])) {
         echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
@@ -573,13 +566,14 @@ function sendMessage($pdo) {
 
     $message = sanitize($_POST['message']);
     $userId = $_SESSION['user_id'];
-    
-    // Проверяем роль пользователя
-    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
-    $stmt->execute([$userId]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $selectedAdminId = isset($_POST['admin_id']) ? (int)$_POST['admin_id'] : null;
     
     try {
+        // Проверяем роль пользователя
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
         if ($user['role'] === 'admin') {
             // Админ отправляет сообщение студенту
             $studentId = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
@@ -589,21 +583,92 @@ function sendMessage($pdo) {
             }
             
             $stmt = $pdo->prepare("
-                INSERT INTO chat_messages (user_id, message, ot) 
-                VALUES (?, ?, 'admin')
+                INSERT INTO chat_messages (user_id, message, ot, selected_admin_id, is_read) 
+                VALUES (?, ?, 'admin', ?, 0)
             ");
-            $stmt->execute([$studentId, $message]);
+            $stmt->execute([$studentId, $message, $userId]);
         } else {
             // Студент отправляет сообщение
+            if (!$selectedAdminId) {
+                echo json_encode(['status' => 'error', 'message' => 'Выберите администратора']);
+                return;
+            }
+            
             $stmt = $pdo->prepare("
-                INSERT INTO chat_messages (user_id, message, ot) 
-                VALUES (?, ?, 'user')
+                INSERT INTO chat_messages (user_id, message, ot, selected_admin_id, is_read) 
+                VALUES (?, ?, 'user', ?, 0)
             ");
-            $stmt->execute([$userId, $message]);
+            $stmt->execute([$userId, $message, $selectedAdminId]);
         }
         echo json_encode(['status' => 'success']);
     } catch(PDOException $e) {
+        error_log('Send message error: ' . $e->getMessage());
         echo json_encode(['status' => 'error', 'message' => 'Ошибка при отправке сообщения']);
+    }
+}
+
+function getMessages($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    $userId = $_SESSION['user_id'];
+    $selectedAdminId = isset($_POST['admin_id']) ? (int)$_POST['admin_id'] : null;
+    
+    try {
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user['role'] === 'admin') {
+            // Для админа показываем только сообщения, где он выбран как получатель
+            $studentId = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
+            if (!$studentId) {
+                echo json_encode(['status' => 'error', 'message' => 'Не выбран студент']);
+                return;
+            }
+            
+            $stmt = $pdo->prepare("
+                SELECT m.*, u.email as username, m.ot,
+                       a.email as admin_email
+                FROM chat_messages m 
+                JOIN users u ON m.user_id = u.id
+                LEFT JOIN users a ON m.selected_admin_id = a.id
+                WHERE m.user_id = ? 
+                AND (
+                    (m.selected_admin_id = ? AND m.ot = 'user') OR 
+                    (m.selected_admin_id IS NOT NULL AND m.ot = 'admin' AND m.selected_admin_id = ?)
+                )
+                ORDER BY m.created_at ASC
+            ");
+            $stmt->execute([$studentId, $userId, $userId]);
+        } else {
+            // Для студента показываем его переписку с выбранным админом
+            $stmt = $pdo->prepare("
+                SELECT m.*, u.email as username, m.ot,
+                       a.email as admin_email
+                FROM chat_messages m 
+                JOIN users u ON m.user_id = u.id
+                LEFT JOIN users a ON m.selected_admin_id = a.id
+                WHERE m.user_id = ? 
+                AND (
+                    (m.selected_admin_id = ? AND m.ot = 'user') OR
+                    (m.selected_admin_id = ? AND m.ot = 'admin')
+                )
+                ORDER BY m.created_at ASC
+            ");
+            $stmt->execute([$userId, $selectedAdminId, $selectedAdminId]);
+        }
+        
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode([
+            'status' => 'success',
+            'messages' => $messages
+        ]);
+    } catch(PDOException $e) {
+        error_log('Get messages error: ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении сообщений']);
     }
 }
 
@@ -839,7 +904,7 @@ function getUserProfile($pdo) {
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT email, avatar FROM users WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT email, avatar, role FROM users WHERE id = ?");
         $stmt->execute([$_SESSION['user_id']]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -847,13 +912,14 @@ function getUserProfile($pdo) {
             echo json_encode([
                 'status' => 'success',
                 'email' => $user['email'],
-                'avatar' => $user['avatar']
+                'avatar' => $user['avatar'],
+                'role' => $user['role']
             ]);
         } else {
             echo json_encode(['status' => 'error', 'message' => 'Пользователь не найден']);
         }
     } catch(PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Ошибка базы данных']);
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении профиля']);
     }
 }
 
@@ -963,6 +1029,739 @@ function updatePassword($pdo) {
         echo json_encode(['status' => 'success']);
     } catch(PDOException $e) {
         echo json_encode(['status' => 'error', 'message' => 'Ошибка базы данных']);
+    }
+}
+
+// Добавим новую функцию для получения непрочитанных сообщений по админам
+function getUnreadMessagesByAdmin($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT selected_admin_id, COUNT(*) as unread_count 
+            FROM chat_messages 
+            WHERE user_id = ? 
+            AND is_read = 0 
+            AND ot = 'admin'
+            GROUP BY selected_admin_id
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $unreadByAdmin = [];
+        foreach ($result as $row) {
+            $unreadByAdmin[$row['selected_admin_id']] = (int)$row['unread_count'];
+        }
+
+        return $unreadByAdmin;
+    } catch(PDOException $e) {
+        return [];
+    }
+}
+
+// Обновим функцию getAdmins
+function getAdmins($pdo) {
+    try {
+        $stmt = $pdo->prepare("SELECT id, email FROM users WHERE role = 'admin'");
+        $stmt->execute();
+        $admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Получаем непрочитанные сообщения для каждого админа
+        $unreadMessages = getUnreadMessagesByAdmin($pdo);
+        
+        // Добавляем количество непрочитанных сообщений к каждому админу
+        foreach ($admins as &$admin) {
+            $admin['unread_count'] = isset($unreadMessages[$admin['id']]) ? $unreadMessages[$admin['id']] : 0;
+        }
+        
+        echo json_encode([
+            'status' => 'success',
+            'admins' => $admins
+        ]);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении списка администраторов']);
+    }
+}
+
+// Функция создания группы
+function createGroup($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    $name = sanitize($_POST['name']);
+    $userIds = isset($_POST['user_ids']) ? json_decode($_POST['user_ids']) : [];
+
+    try {
+        $pdo->beginTransaction();
+
+        // Создаем группу
+        $stmt = $pdo->prepare("INSERT INTO groups (name) VALUES (?)");
+        $stmt->execute([$name]);
+        $groupId = $pdo->lastInsertId();
+
+        // Добавляем пользователей в группу
+        if (!empty($userIds)) {
+            $stmt = $pdo->prepare("INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)");
+            foreach ($userIds as $userId) {
+                $stmt->execute([$userId, $groupId]);
+            }
+        }
+
+        $pdo->commit();
+        echo json_encode(['status' => 'success', 'group_id' => $groupId]);
+    } catch(PDOException $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при создании группы']);
+    }
+}
+
+// Функция получения групп
+function getGroups($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    try {
+        // Получаем все группы с количеством пользователей
+        $stmt = $pdo->prepare("
+            SELECT g.*, COUNT(ug.user_id) as users_count
+            FROM groups g
+            LEFT JOIN user_groups ug ON g.id = ug.group_id
+            GROUP BY g.id
+        ");
+        $stmt->execute();
+        $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Получаем пользователей для каждой группы
+        foreach ($groups as &$group) {
+            $stmt = $pdo->prepare("
+                SELECT u.id, u.email
+                FROM users u
+                JOIN user_groups ug ON u.id = ug.user_id
+                WHERE ug.group_id = ?
+            ");
+            $stmt->execute([$group['id']]);
+            $group['users'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        echo json_encode(['status' => 'success', 'groups' => $groups]);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении групп']);
+    }
+}
+
+// Функция удаления группы
+function deleteGroup($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    $groupId = (int)$_POST['group_id'];
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM groups WHERE id = ?");
+        $stmt->execute([$groupId]);
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при удалении группы']);
+    }
+}
+
+// Вспомогательная функция проверки админа
+function isAdmin() {
+    $isAdmin = isset($_SESSION['user_id']) && isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+    if (!$isAdmin) {
+        error_log('Admin check failed: ' . 
+            'user_id=' . (isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'not set') . 
+            ', role=' . (isset($_SESSION['role']) ? $_SESSION['role'] : 'not set')
+        );
+    }
+    return $isAdmin;
+}
+
+function removeUserFromGroup($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    $userId = (int)$_POST['user_id'];
+    $groupId = (int)$_POST['group_id'];
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM user_groups WHERE user_id = ? AND group_id = ?");
+        $stmt->execute([$userId, $groupId]);
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при удалении пользователя из группы']);
+    }
+}
+
+function addUserToGroup($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    $userId = (int)$_POST['user_id'];
+    $groupId = (int)$_POST['group_id'];
+
+    try {
+        // Проверяем, не состоит ли пользователь уже в группе
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM user_groups WHERE user_id = ? AND group_id = ?");
+        $stmt->execute([$userId, $groupId]);
+        if ($stmt->fetchColumn() > 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Пользователь уже в группе']);
+            return;
+        }
+
+        // Добавляем пользователя в группу
+        $stmt = $pdo->prepare("INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)");
+        $stmt->execute([$userId, $groupId]);
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при добавлении пользователя в группу']);
+    }
+}
+
+// Добавим функцию обновления группы
+function updateGroup($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    $groupId = (int)$_POST['id'];
+    $name = sanitize($_POST['name']);
+    $userIds = json_decode($_POST['user_ids']);
+
+    try {
+        $pdo->beginTransaction();
+
+        // Обновляем название группы
+        $stmt = $pdo->prepare("UPDATE groups SET name = ? WHERE id = ?");
+        $stmt->execute([$name, $groupId]);
+
+        // Удаляем всех пользователей из группы
+        $stmt = $pdo->prepare("DELETE FROM user_groups WHERE group_id = ?");
+        $stmt->execute([$groupId]);
+
+        // Добавляем выбранных пользователей
+        if (!empty($userIds)) {
+            $stmt = $pdo->prepare("INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)");
+            foreach ($userIds as $userId) {
+                $stmt->execute([$userId, $groupId]);
+            }
+        }
+
+        $pdo->commit();
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        $pdo->rollBack();
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при обновлении группы']);
+    }
+}
+
+function getGrades($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                g.user_id,
+                g.lesson_id,
+                g.grade,
+                g.created_at,
+                u.email as user_email,
+                l.title as lesson_title,
+                c.title as course_title
+            FROM grades g
+            JOIN users u ON g.user_id = u.id
+            JOIN lessons l ON g.lesson_id = l.id
+            JOIN courses c ON l.course_id = c.id
+            ORDER BY g.created_at DESC
+        ");
+        $stmt->execute();
+        $grades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'status' => 'success',
+            'grades' => $grades
+        ]);
+    } catch(PDOException $e) {
+        error_log("Error getting grades: " . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении оценок']);
+    }
+}
+
+function setGrade($pdo) {
+    if (!isset($_SESSION['user_id']) || !isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+        echo json_encode(['status' => 'error', 'message' => 'Нет доступа']);
+        return;
+    }
+
+    try {
+        // Получаем и валидируем данные
+        $userId = isset($_POST['user_id']) ? (int)$_POST['user_id'] : 0;
+        $lessonId = isset($_POST['lesson_id']) ? (int)$_POST['lesson_id'] : 0;
+        $grade = isset($_POST['grade']) ? (float)$_POST['grade'] : 0;
+
+        // Добавляем отладочную информацию
+        error_log("Setting grade - User ID: $userId, Lesson ID: $lessonId, Grade: $grade");
+
+        // Проверяем корректность данных
+        if (!$userId || !$lessonId || $grade < 0 || $grade > 5) {
+            error_log("Invalid data - User ID: $userId, Lesson ID: $lessonId, Grade: $grade");
+            echo json_encode(['status' => 'error', 'message' => 'Некорректные данные']);
+            return;
+        }
+
+        // Проверяем существование пользователя
+        $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        if (!$stmt->fetch()) {
+            error_log("User not found - ID: $userId");
+            echo json_encode(['status' => 'error', 'message' => 'Пользователь не найден']);
+            return;
+        }
+
+        // Проверяем существование урока
+        $stmt = $pdo->prepare("SELECT id FROM lessons WHERE id = ?");
+        $stmt->execute([$lessonId]);
+        if (!$stmt->fetch()) {
+            error_log("Lesson not found - ID: $lessonId");
+            echo json_encode(['status' => 'error', 'message' => 'Урок не найден']);
+            return;
+        }
+
+        // Начинаем транзакцию
+        $pdo->beginTransaction();
+
+        try {
+            // Проверяем существующую оценку
+            $stmt = $pdo->prepare("
+                SELECT id 
+                FROM grades 
+                WHERE user_id = ? AND lesson_id = ?
+            ");
+            $stmt->execute([$userId, $lessonId]);
+            $existingGrade = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existingGrade) {
+                // Обновляем существующую оценку
+                $stmt = $pdo->prepare("
+                    UPDATE grades 
+                    SET grade = ?, 
+                        updated_at = CURRENT_TIMESTAMP,
+                        created_by = ?
+                    WHERE user_id = ? AND lesson_id = ?
+                ");
+                $stmt->execute([$grade, $_SESSION['user_id'], $userId, $lessonId]);
+                error_log("Grade updated successfully");
+            } else {
+                // Добавляем новую оценку
+                $stmt = $pdo->prepare("
+                    INSERT INTO grades (user_id, lesson_id, grade, created_by) 
+                    VALUES (?, ?, ?, ?)
+                ");
+                $stmt->execute([$userId, $lessonId, $grade, $_SESSION['user_id']]);
+                error_log("New grade added successfully");
+            }
+
+            // Фиксируем транзакцию
+            $pdo->commit();
+
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Оценка сохранена',
+                'grade' => $grade
+            ]);
+        } catch (PDOException $e) {
+            // Откатываем транзакцию в случае ошибки
+            $pdo->rollBack();
+            error_log("Database error: " . $e->getMessage());
+            throw $e;
+        }
+    } catch (PDOException $e) {
+        error_log("Error in setGrade: " . $e->getMessage());
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Ошибка при сохранении оценки',
+            'debug' => $e->getMessage() // Добавляем для отладки
+        ]);
+    }
+}
+
+function getAverageGrades($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    try {
+        // Получаем общую среднюю оценку по всем урокам
+        $stmt = $pdo->prepare("
+            SELECT 
+                u.id as user_id,
+                u.email as user_email,
+                AVG(g.grade) as average_grade,
+                COUNT(g.id) as grades_count
+            FROM users u
+            LEFT JOIN grades g ON u.id = g.user_id
+            WHERE u.role = 'user'
+            GROUP BY u.id, u.email
+        ");
+        $stmt->execute();
+        $overallAverages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Получаем средние оценки по курсам
+        $stmt = $pdo->prepare("
+            SELECT 
+                u.id as user_id,
+                u.email as user_email,
+                c.id as course_id,
+                c.title as course_title,
+                AVG(g.grade) as course_average,
+                COUNT(g.id) as course_grades_count
+            FROM users u
+            CROSS JOIN courses c
+            LEFT JOIN lessons l ON l.course_id = c.id
+            LEFT JOIN grades g ON g.lesson_id = l.id AND g.user_id = u.id
+            WHERE u.role = 'user'
+            GROUP BY u.id, u.email, c.id, c.title
+            ORDER BY u.id, c.title
+        ");
+        $stmt->execute();
+        $courseAverages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Форматируем данные
+        $result = [];
+        foreach ($overallAverages as $overall) {
+            $result[$overall['user_id']] = [
+                'user_email' => $overall['user_email'],
+                'overall_average' => $overall['average_grade'] ? number_format((float)$overall['average_grade'], 1) : 'Нет оценок',
+                'total_grades' => $overall['grades_count'],
+                'courses' => []
+            ];
+        }
+
+        foreach ($courseAverages as $course) {
+            if (isset($result[$course['user_id']])) {
+                $result[$course['user_id']]['courses'][] = [
+                    'course_title' => $course['course_title'],
+                    'average' => $course['course_average'] ? number_format((float)$course['course_average'], 1) : 'Нет оценок',
+                    'grades_count' => $course['course_grades_count']
+                ];
+            }
+        }
+
+        echo json_encode([
+            'status' => 'success', 
+            'averages' => array_values($result)
+        ]);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении средних оценок']);
+    }
+}
+
+function deleteGrade($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    $userId = (int)$_POST['user_id'];
+    $lessonId = (int)$_POST['lesson_id'];
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM grades WHERE user_id = ? AND lesson_id = ?");
+        $stmt->execute([$userId, $lessonId]);
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при удалении оценки']);
+    }
+}
+
+function getGroupAverageGrades($pdo) {
+    if (!isAdmin()) {
+        echo json_encode(['status' => 'error', 'message' => 'Доступ запрещен']);
+        return;
+    }
+
+    try {
+        // Сначала получаем количество студентов в каждой группе
+        $stmt = $pdo->prepare("
+            SELECT 
+                g.id as group_id,
+                g.name as group_name,
+                COUNT(DISTINCT ug.user_id) as students_count
+            FROM groups g
+            LEFT JOIN user_groups ug ON g.id = ug.group_id
+            GROUP BY g.id, g.name
+        ");
+        $stmt->execute();
+        $groupsInfo = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Затем получаем оценки по курсам для каждой группы
+        $stmt = $pdo->prepare("
+            SELECT 
+                g.id as group_id,
+                g.name as group_name,
+                c.id as course_id,
+                c.title as course_title,
+                AVG(gr.grade) as course_average,
+                COUNT(gr.id) as grades_count
+            FROM groups g
+            LEFT JOIN user_groups ug ON g.id = ug.group_id
+            CROSS JOIN courses c
+            LEFT JOIN lessons l ON l.course_id = c.id
+            LEFT JOIN grades gr ON gr.lesson_id = l.id AND gr.user_id = ug.user_id
+            GROUP BY g.id, g.name, c.id, c.title
+            ORDER BY g.name, c.title
+        ");
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Форматируем данные
+        $groups = [];
+        foreach ($groupsInfo as $groupInfo) {
+            $groups[$groupInfo['group_id']] = [
+                'group_name' => $groupInfo['group_name'],
+                'students_count' => $groupInfo['students_count'],
+                'courses' => []
+            ];
+        }
+
+        foreach ($results as $row) {
+            if (isset($groups[$row['group_id']])) {
+                $groups[$row['group_id']]['courses'][] = [
+                    'course_title' => $row['course_title'],
+                    'average' => $row['course_average'] ? number_format((float)$row['course_average'], 1) : 'Нет оценок',
+                    'grades_count' => $row['grades_count']
+                ];
+            }
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'groups' => array_values($groups)
+        ]);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении оценок групп']);
+    }
+}
+
+function getUserGrades($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    try {
+        // Получаем общую статистику
+        $stmt = $pdo->prepare("
+            SELECT 
+                AVG(g.grade) as overall_average,
+                COUNT(g.id) as total_grades
+            FROM grades g
+            WHERE g.user_id = ?
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $overall = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Получаем оценки по курсам
+        $stmt = $pdo->prepare("
+            SELECT 
+                c.id as course_id,
+                c.title as course_title,
+                AVG(g.grade) as course_average,
+                COUNT(g.id) as grades_count
+            FROM courses c
+            LEFT JOIN lessons l ON l.course_id = c.id
+            LEFT JOIN grades g ON g.lesson_id = l.id AND g.user_id = ?
+            GROUP BY c.id, c.title
+            ORDER BY c.title
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $courseGrades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Получаем все оценки
+        $stmt = $pdo->prepare("
+            SELECT 
+                c.title as course_title,
+                l.title as lesson_title,
+                g.grade,
+                g.created_at
+            FROM grades g
+            JOIN lessons l ON g.lesson_id = l.id
+            JOIN courses c ON l.course_id = c.id
+            WHERE g.user_id = ?
+            ORDER BY g.created_at DESC
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $allGrades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'status' => 'success',
+            'overall' => [
+                'average' => $overall['overall_average'] ? number_format((float)$overall['overall_average'], 1) : 'Нет оценок',
+                'total' => $overall['total_grades']
+            ],
+            'courses' => $courseGrades,
+            'grades' => $allGrades
+        ]);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении оценок']);
+    }
+}
+
+function getUserGroup($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT g.id, g.name, COUNT(ug2.user_id) as total_students
+            FROM groups g
+            JOIN user_groups ug ON g.id = ug.group_id
+            LEFT JOIN user_groups ug2 ON g.id = ug2.group_id
+            WHERE ug.user_id = ?
+            GROUP BY g.id, g.name
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $group = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'status' => 'success',
+            'group' => $group
+        ]);
+    } catch(PDOException $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении информации о группе']);
+    }
+}
+
+function getUnreadMessagesCount($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user['role'] === 'admin') {
+            // Для админа считаем непрочитанные сообщения от каждого пользователя
+            $stmt = $pdo->prepare("
+                SELECT user_id, COUNT(*) as count 
+                FROM chat_messages 
+                WHERE selected_admin_id = ? 
+                AND is_read = 0 
+                AND ot = 'user'
+                GROUP BY user_id
+            ");
+            $stmt->execute([$_SESSION['user_id']]);
+            $unreadByUser = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Считаем общее количество непрочитанных сообщений
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count 
+                FROM chat_messages 
+                WHERE selected_admin_id = ? 
+                AND is_read = 0 
+                AND ot = 'user'
+            ");
+            $stmt->execute([$_SESSION['user_id']]);
+            $totalUnread = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Формируем массив непрочитанных сообщений по пользователям
+            $unreadCounts = [];
+            foreach ($unreadByUser as $item) {
+                $unreadCounts[$item['user_id']] = (int)$item['count'];
+            }
+
+            echo json_encode([
+                'status' => 'success',
+                'count' => (int)$totalUnread['count'],
+                'unread_by_user' => $unreadCounts
+            ]);
+        } else {
+            // Для обычного пользователя считаем непрочитанные сообщения от админов
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count 
+                FROM chat_messages 
+                WHERE user_id = ? 
+                AND is_read = 0 
+                AND ot = 'admin'
+            ");
+            $stmt->execute([$_SESSION['user_id']]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'status' => 'success',
+                'count' => (int)$result['count']
+            ]);
+        }
+    } catch(PDOException $e) {
+        error_log('Error getting unread messages: ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при получении сообщений']);
+    }
+}
+
+function markMessagesAsRead($pdo) {
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user['role'] === 'admin') {
+            // Для админа отмечаем прочитанными сообщения только от конкретного пользователя
+            $studentId = isset($_POST['student_id']) ? (int)$_POST['student_id'] : null;
+            if ($studentId) {
+                $stmt = $pdo->prepare("
+                    UPDATE chat_messages 
+                    SET is_read = 1 
+                    WHERE selected_admin_id = ? 
+                    AND user_id = ?
+                    AND is_read = 0 
+                    AND ot = 'user'
+                ");
+                $stmt->execute([$_SESSION['user_id'], $studentId]);
+            }
+        } else {
+            // Для обычного пользователя отмечаем прочитанными сообщения от админов
+            $stmt = $pdo->prepare("
+                UPDATE chat_messages 
+                SET is_read = 1 
+                WHERE user_id = ? 
+                AND is_read = 0 
+                AND ot = 'admin'
+            ");
+            $stmt->execute([$_SESSION['user_id']]);
+        }
+
+        echo json_encode(['status' => 'success']);
+    } catch(PDOException $e) {
+        error_log('Error marking messages as read: ' . $e->getMessage());
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при обновлении сообщений']);
     }
 }
 ?> 
