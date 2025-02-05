@@ -7,6 +7,7 @@
     <title>Профиль</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="../css/style.css" rel="stylesheet">
 </head>
 
@@ -43,6 +44,17 @@
                         <div class="mb-4">
                             <h5 class="text-muted mb-2">Email</h5>
                             <p id="userEmail" class="fs-5"></p>
+                        </div>
+
+                        <!-- ФИО -->
+                        <div class="mb-4">
+                            <h5 class="text-muted mb-2">ФИО</h5>
+                            <div class="d-flex align-items-center justify-content-center">
+                                <p id="userFullName" class="fs-5 mb-0 me-2"></p>
+                                <button class="btn btn-sm btn-outline-primary" onclick="showEditFullNameModal()">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Кнопка изменения пароля -->
@@ -151,6 +163,32 @@
         </div>
     </div>
 
+    <!-- Модальное окно изменения ФИО -->
+    <div class="modal fade" id="editFullNameModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Изменение ФИО</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editFullNameForm">
+                        <div class="mb-3">
+                            <label class="form-label">ФИО</label>
+                            <input type="text" class="form-control" id="fullNameInput" required>
+                            <div class="form-text">Введите ваше полное имя, как оно будет отображаться в чате</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-save me-2"></i>Сохранить
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="footer-container"></div>
+    <script src="../js/loadFooter.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../js/api.js"></script>
     <script src="../js/profile.js"></script>

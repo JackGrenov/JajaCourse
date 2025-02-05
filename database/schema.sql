@@ -2,6 +2,7 @@ CREATE TABLE users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     email VARCHAR(191) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) DEFAULT NULL,
     role ENUM('user', 'admin') DEFAULT 'user',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     avatar VARCHAR(255) DEFAULT NULL
@@ -11,7 +12,9 @@ CREATE TABLE courses (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INT,
+    CONSTRAINT fk_courses_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE user_progress (
@@ -336,4 +339,20 @@ ALTER TABLE grades
     ADD CONSTRAINT unique_user_lesson 
         UNIQUE (user_id, lesson_id),
     ADD CONSTRAINT fk_grades_created_by 
-        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL; 
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+-- Добавляем поле created_by в таблицу courses
+ALTER TABLE courses
+ADD COLUMN created_by INT,
+ADD CONSTRAINT fk_courses_created_by 
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+-- Обновляем существующие записи, установив created_by для первого админа
+UPDATE courses c
+SET c.created_by = (
+    SELECT id 
+    FROM users 
+    WHERE role = 'admin' 
+    ORDER BY id 
+    LIMIT 1
+); 

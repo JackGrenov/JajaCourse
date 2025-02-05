@@ -8,6 +8,7 @@ async function loadUserProfile() {
     const response = await Api.request('get_user_profile');
     if (response.status === 'success') {
         document.getElementById('userEmail').textContent = response.email;
+        document.getElementById('userFullName').textContent = response.full_name || 'Не указано';
         if (response.avatar) {
             document.getElementById('avatarImage').src = '../' + response.avatar;
         }
@@ -50,7 +51,11 @@ async function loadUserGrades() {
             <tr>
                 <td>${grade.course_title}</td>
                 <td>${grade.lesson_title}</td>
-                <td><span class="badge ${getBadgeClass(grade.grade)}">${parseFloat(grade.grade).toFixed(1)}</span></td>
+                <td>
+                    <span class="badge ${getBadgeClass(grade.grade)}">
+                        ${parseFloat(grade.grade).toFixed(1)}
+                    </span>
+                </td>
                 <td>${new Date(grade.created_at).toLocaleString()}</td>
             </tr>
         `).join('');
@@ -203,6 +208,28 @@ async function logout() {
         window.location.href = 'login.html';
     }
 }
+
+function showEditFullNameModal() {
+    const currentFullName = document.getElementById('userFullName').textContent;
+    document.getElementById('fullNameInput').value = currentFullName !== 'Не указано' ? currentFullName : '';
+    const modal = new bootstrap.Modal(document.getElementById('editFullNameModal'));
+    modal.show();
+}
+
+document.getElementById('editFullNameForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const fullName = document.getElementById('fullNameInput').value.trim();
+    const response = await Api.request('update_full_name', { full_name: fullName });
+    
+    if (response.status === 'success') {
+        document.getElementById('userFullName').textContent = fullName || 'Не указано';
+        bootstrap.Modal.getInstance(document.getElementById('editFullNameModal')).hide();
+        showNotification('success', 'ФИО успешно обновлено');
+    } else {
+        showNotification('error', 'Ошибка при обновлении ФИО');
+    }
+});
 
 class ProfileManager {
     static async loadUserData() {

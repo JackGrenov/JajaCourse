@@ -56,19 +56,59 @@ async function loadUsers() {
     const response = await Api.getUsers();
     if (response.status === 'success') {
         document.getElementById('usersList').innerHTML = response.users.map(user => `
-                    <tr>
-                        <td>${user.id}</td>
-                        <td>${user.email}</td>
-                        <td>${user.role}</td>
-                        <td>
-                            <button class="btn btn-sm btn-${user.role === 'admin' ? 'warning' : 'success'}"
-                                    onclick="toggleUserRole(${user.id})">
-                                ${user.role === 'admin' ? 'Сделать пользователем' : 'Сделать админом'}
-                            </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Удалить</button>
-                        </td>
-                    </tr>
-                `).join('');
+            <tr>
+                <td>${user.id}</td>
+                <td>${user.email}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <span id="fullName_${user.id}">${user.full_name || '—'}</span>
+                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="editUserFullName(${user.id}, '${user.full_name || ''}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </td>
+                <td>${user.role}</td>
+                <td>
+                    <button class="btn btn-sm btn-${user.role === 'admin' ? 'warning' : 'success'}"
+                            onclick="toggleUserRole(${user.id})">
+                        ${user.role === 'admin' ? 'Сделать пользователем' : 'Сделать админом'}
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Удалить</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
+// Добавляем функцию для редактирования ФИО
+function editUserFullName(userId, currentFullName) {
+    const newFullName = prompt('Введите ФИО пользователя:', currentFullName);
+    if (newFullName !== null) {
+        updateUserFullName(userId, newFullName);
+    }
+}
+
+// Функция для обновления ФИО через API
+async function updateUserFullName(userId, fullName) {
+    try {
+        const response = await Api.request('update_user_full_name', {
+            user_id: userId,
+            full_name: fullName
+        });
+
+        if (response.status === 'success') {
+            // Обновляем отображение ФИО на странице
+            const fullNameElement = document.getElementById(`fullName_${userId}`);
+            if (fullNameElement) {
+                fullNameElement.textContent = fullName || '—';
+            }
+            showNotification('success', 'ФИО успешно обновлено');
+        } else {
+            showNotification('error', 'Ошибка при обновлении ФИО');
+        }
+    } catch (error) {
+        console.error('Error updating full name:', error);
+        showNotification('error', 'Ошибка при обновлении ФИО');
     }
 }
 
@@ -149,15 +189,29 @@ async function getMessages() {
     const response = await Api.getMessages(0, currentStudentId);
     if (response.status === 'success') {
         const chatMessages = document.getElementById('chatMessages');
-        chatMessages.innerHTML = response.messages.map(msg => `
-            <div class="message ${msg.ot === 'admin' ? 'message-admin' : 'message-user'}">
-                <div class="message-header">
-                    <strong>${msg.ot === 'admin' ? 'Преподаватель' : msg.username}</strong>
-                    <small class="text-muted">${new Date(msg.created_at).toLocaleString()}</small>
+        chatMessages.innerHTML = response.messages.map(msg => {
+            // Форматируем дату
+            const messageDate = new Date(msg.created_at);
+            const formattedTime = messageDate.toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const formattedDate = messageDate.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: '2-digit'
+            });
+
+            return `
+                <div class="message ${msg.ot === 'admin' ? 'message-admin' : 'message-user'}">
+                    <div class="message-header">
+                        <strong>${msg.ot === 'admin' ? 'Преподаватель' : msg.username}</strong>
+                        <span class="message-time">${formattedDate}, ${formattedTime}</span>
+                    </div>
+                    <div class="message-text">${msg.message}</div>
                 </div>
-                <div class="message-text">${msg.message}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         // Отмечаем как прочитанные только сообщения от текущего студента

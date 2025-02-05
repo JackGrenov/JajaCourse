@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ-панель</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="../css/style.css" rel="stylesheet">
 
 </head>
@@ -70,6 +71,7 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Email</th>
+                                <th>ФИО</th>
                                 <th>Роль</th>
                                 <th>Действия</th>
                             </tr>
@@ -432,9 +434,182 @@
         </div>
     </div>
 
+    <div id="footer-container"></div>
+    <script src="../js/loadFooter.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../js/api.js"></script>
     <script src="../js/admin.js"></script>
+    <script>
+    async function selectStudent(studentId, studentEmail) {
+        currentStudentId = studentId;
+
+        // Обновляем активный элемент в списке
+        document.querySelectorAll('#studentsList .list-group-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        event.currentTarget.classList.add('active');
+
+        document.getElementById('chatTitle').textContent = `Чат со студентом: ${studentEmail}`;
+        document.getElementById('chatMessages').innerHTML = '';
+        document.getElementById('chatForm').style.display = 'flex';
+
+        if (chatInterval) {
+            clearInterval(chatInterval);
+        }
+
+        // Сначала отмечаем сообщения как прочитанные
+        await Api.request('mark_messages_as_read', { student_id: studentId });
+        // Сразу обновляем счетчики и скрываем бейдж
+        await updateUnreadCount();
+        await updateStudentsUnreadCount();
+        const badge = document.getElementById(`student-badge-${studentId}`);
+        if (badge) {
+            badge.style.display = 'none';
+        }
+
+        // Затем загружаем сообщения и запускаем интервал
+        await getMessages();
+        chatInterval = setInterval(getMessages, 3000);
+    }
+
+    async function getMessages() {
+        if (!currentStudentId) {
+            console.log('Студент не выбран');
+            return;
+        }
+
+        const response = await Api.getMessages(0, currentStudentId);
+        if (response.status === 'success') {
+            const chatMessages = document.getElementById('chatMessages');
+            const newMessages = response.messages.map(msg => {
+                // Форматируем дату
+                const messageDate = new Date(msg.created_at);
+                const formattedTime = messageDate.toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const formattedDate = messageDate.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: '2-digit'
+                });
+
+                return `
+                    <div class="message ${msg.ot === 'admin' ? 'message-outgoing' : 'message-incoming'}">
+                        <div class="message-header">
+                            <strong>${msg.ot === 'admin' ? 'Вы' : msg.username}</strong>
+                            <span class="message-time">${formattedDate}, ${formattedTime}</span>
+                        </div>
+                        <div class="message-text">${msg.message}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Проверяем, изменились ли сообщения
+            if (chatMessages.innerHTML !== newMessages) {
+                chatMessages.innerHTML = newMessages;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                // Отмечаем сообщения как прочитанные для текущего студента
+                await Api.request('mark_messages_as_read', { student_id: currentStudentId });
+                // Обновляем счетчики
+                await updateUnreadCount();
+                await updateStudentsUnreadCount();
+            }
+        }
+    }
+
+    // Обновляем обработчик переключения вкладок
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', async (e) => {
+            // Очищаем интервал чата
+            if (chatInterval) {
+                clearInterval(chatInterval);
+                chatInterval = null;
+            }
+
+            // Если переключились на вкладку чатов
+            if (e.target.getAttribute('href') === '#chats') {
+                // Сбрасываем текущего студента
+                currentStudentId = null;
+                
+                // Сбрасываем активный элемент в списке студентов
+                document.querySelectorAll('#studentsList .list-group-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+
+                // Очищаем чат и возвращаем заголовок по умолчанию
+                document.getElementById('chatMessages').innerHTML = '';
+                document.getElementById('chatTitle').textContent = 'Выберите студента для чата';
+                document.getElementById('chatForm').style.display = 'none';
+
+                // Обновляем счетчики непрочитанных сообщений
+                await updateUnreadCount();
+                await updateStudentsUnreadCount();
+            }
+        });
+    });
+
+    // Добавляем функцию для определения класса бейджа в зависимости от оценки
+    function getBadgeClass(grade) {
+        if (!grade) return 'bg-secondary';
+        grade = parseFloat(grade);
+        if (grade >= 4.5) return 'bg-success';
+        if (grade >= 3.5) return 'bg-primary';
+        if (grade >= 2.5) return 'bg-warning';
+        return 'bg-danger';
+    }
+
+    async function loadGrades() {
+        const response = await Api.request('get_grades');
+        if (response.status === 'success') {
+            document.getElementById('gradesList').innerHTML = response.grades.map(grade => `
+                <tr>
+                    <td>${grade.user_email}</td>
+                    <td>${grade.lesson_title}</td>
+                    <td><span class="badge ${getBadgeClass(grade.grade)}">${parseFloat(grade.grade).toFixed(1)}</span></td>
+                    <td>${new Date(grade.created_at).toLocaleString()}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" 
+                                onclick="deleteGrade(${grade.user_id}, ${grade.lesson_id})">
+                            Удалить
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    function showSelectedStudentGrades(event) {
+        const selectedOption = event.target.selectedOptions[0];
+        const gradesContainer = document.getElementById('selectedStudentGrades');
+
+        if (!selectedOption.value) {
+            gradesContainer.classList.add('d-none');
+            return;
+        }
+
+        const studentData = JSON.parse(selectedOption.dataset.grades);
+
+        // Показываем контейнер
+        gradesContainer.classList.remove('d-none');
+
+        // Обновляем общую статистику
+        document.getElementById('overallGrade').innerHTML = `<span class="badge ${getBadgeClass(studentData.overall_average)}">${studentData.overall_average}</span>`;
+        document.getElementById('totalGrades').textContent = studentData.total_grades;
+
+        // Обновляем оценки по курсам
+        document.getElementById('courseGradesList').innerHTML = studentData.courses.map(course => `
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <strong>${course.course_title}</strong>
+                    <small class="text-muted">(${course.grades_count} оценок)</small>
+                </div>
+                <span class="badge ${getBadgeClass(course.average)}">${course.average}</span>
+            </div>
+        `).join('') || '<p class="text-muted">Нет оценок по курсам</p>';
+    }
+    </script>
 </body>
 
 </html>

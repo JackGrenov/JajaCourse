@@ -36,6 +36,17 @@ async function loadCourse() {
                     </a>
                 `).join('');
 
+        // Отображаем среднюю оценку, если она есть и пользователь не админ
+        const averageGradeBlock = document.getElementById('averageGradeBlock');
+        const averageGrade = document.getElementById('averageGrade');
+        
+        if (!isAdmin && response.average_grade) {
+            averageGrade.textContent = response.average_grade;
+            averageGradeBlock.classList.remove('d-none');
+        } else {
+            averageGradeBlock.classList.add('d-none');
+        }
+
         // Находим первый урок по порядковому номеру
         const firstLesson = response.lessons.find(lesson => lesson.order_num === 1);
         if (firstLesson) {
@@ -118,7 +129,22 @@ function formatContent(content) {
     return content;
 }
 
-// Заменяем два обработчика на один
+// Функция для обновления прогресс-бара курса
+async function updateCourseProgress() {
+    if (!currentCourseId) return;
+    
+    const response = await Api.getProgress(currentCourseId);
+    if (response.status === 'success') {
+        // Находим прогресс-бар на главной странице
+        const progressBar = document.querySelector(`[data-course-id="${currentCourseId}"] .progress-bar`);
+        if (progressBar) {
+            progressBar.style.width = `${response.progress}%`;
+            progressBar.textContent = `${response.progress}%`;
+        }
+    }
+}
+
+// Обновляем обработчик переключения статуса урока
 document.getElementById('lessonToggle').addEventListener('click', async function () {
     if (currentCourseId && currentLessonId) {
         const isCompleted = this.classList.contains('btn-secondary');
@@ -143,11 +169,9 @@ document.getElementById('lessonToggle').addEventListener('click', async function
                     this.textContent = 'Отметить как пройденный';
                 }
             }
-            // Обновляем только прогресс курса, без перезагрузки всего списка
-            const progressResponse = await Api.getProgress(currentCourseId);
-            if (progressResponse.status === 'success') {
-                // Здесь можно обновить отображение прогресса, если оно есть на странице
-            }
+            
+            // Обновляем прогресс-бар
+            await updateCourseProgress();
         } else {
             alert('Ошибка при обновлении статуса урока');
         }
@@ -172,3 +196,42 @@ async function logout() {
 
 // Инициализация
 checkAuth();
+
+// Загрузка курсов
+async function loadCourses() {
+    const response = await Api.request('get_courses');
+    const authResponse = await Api.request('check_auth');
+    const isAdmin = authResponse.status === 'success' && authResponse.role === 'admin';
+
+    let groupResponse = { group: null };
+    if (!isAdmin) {
+        groupResponse = await Api.request('get_user_group');
+    }
+
+    if (response.status === 'success') {
+        const coursesList = document.getElementById('coursesList');
+        coursesList.innerHTML = response.courses.map(course => {
+            const isBlocked = !isAdmin && !groupResponse.group; // Блокируем только для обычных пользователей без группы
+            return `
+            <div class="col-12 col-sm-6 col-lg-4 mb-4">
+                <div class="card h-100" data-course-id="${course.id}">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">${course.title}</h5>
+                        <p class="card-text">${course.description}</p>
+                        <div class="progress mb-3 ${isBlocked ? 'disabled' : ''}" ${isBlocked ? 'style="opacity: 0.5; pointer-events: none;"' : ''}>
+                            <div class="progress-bar" role="progressbar" style="width: ${course.progress}%" data-course-id="${course.id}">
+                                ${course.progress}%
+                            </div>
+                        </div>
+                        ${isBlocked ?
+                    `<div class="alert alert-warning mb-0 mt-auto w-100">Курс заблокирован. Обратитесь к администратору для добавления в группу.</div>` :
+                    `<button class="btn btn-primary w-100 mt-auto" onclick="window.location.href='course.html?id=${course.id}'">
+                                Начать обучение
+                            </button>`
+                }
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+}
