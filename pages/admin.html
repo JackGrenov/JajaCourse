@@ -235,12 +235,17 @@
                     <form id="courseForm">
                         <input type="hidden" id="courseId">
                         <div class="mb-3">
-                            <label class="form-label">Название курса</label>
+                            <label for="courseTitle" class="form-label">Название курса</label>
                             <input type="text" class="form-control" id="courseTitle" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Описание</label>
+                            <label for="courseDescription" class="form-label">Описание курса</label>
                             <textarea class="form-control" id="courseDescription" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="courseImage" class="form-label">Изображение курса</label>
+                            <input type="file" class="form-control" id="courseImage" accept="image/*">
+                            <div id="courseImagePreview" class="mt-2"></div>
                         </div>
                         <button type="submit" class="btn btn-primary" id="submitCourseBtn">
                             <span class="spinner-border spinner-border-sm d-none" role="status"

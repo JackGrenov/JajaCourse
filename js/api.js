@@ -132,6 +132,11 @@ class Api {
         return await this.request('update_avatar', formData);
     }
 
+    static async updateCourseImage(courseId, formData) {
+        formData.append('course_id', courseId);
+        return await this.request('update_course_image', formData);
+    }
+
     static async updatePassword(data) {
         return await this.request('update_password', data);
     }

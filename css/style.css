@@ -179,6 +179,7 @@
 .progress {
     height: 20px;
     background-color: rgba(155, 89, 182, 0.1);
+    margin-bottom: 0.75rem;
 }
 
 .progress.disabled {
@@ -196,20 +197,24 @@
 }
 
 .card-body {
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    padding: 1rem;
+    flex-grow: 1;
+}
+
+.card-title {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
 }
 
 .card-text {
+    margin-bottom: 0.5rem;
     flex-grow: 1;
-    margin-bottom: 1rem;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    line-clamp: 3;
+}
+
+.card-text.text-muted.small {
+    margin-bottom: 0.5rem;
 }
 
 /* Медиа-запросы для адаптивной высоты карточек */

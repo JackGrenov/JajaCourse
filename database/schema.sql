@@ -14,6 +14,7 @@ CREATE TABLE courses (
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INT,
+    image VARCHAR(255) DEFAULT NULL,
     CONSTRAINT fk_courses_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 

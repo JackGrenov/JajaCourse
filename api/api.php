@@ -101,7 +101,10 @@ switch($action) {
         getUserProfile($pdo);
         break;
     case 'update_avatar':
-        updateAvatar($pdo);
+        handleUpdateAvatar();
+        break;
+    case 'update_course_image':
+        handleUpdateCourseImage();
         break;
     case 'update_password':
         updatePassword($pdo);
@@ -291,7 +294,7 @@ function getProgress($pdo) {
 
 function getCourses($pdo) {
     $stmt = $pdo->query("
-        SELECT c.id, c.title, c.description, 
+        SELECT c.id, c.title, c.description, c.image,
                COALESCE(u.full_name, u.email) as created_by_name,
                u.id as created_by_id
         FROM courses c
@@ -376,8 +379,13 @@ function getUsers($pdo) {
 }
 
 function addCourse($pdo) {
-    if (!isset($_SESSION['user_id'])) {
-        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
+    if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+        echo json_encode(['status' => 'error', 'message' => 'Нет прав доступа']);
+        return;
+    }
+
+    if (!isset($_POST['title']) || !isset($_POST['description'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не все данные предоставлены']);
         return;
     }
     
@@ -386,27 +394,56 @@ function addCourse($pdo) {
     
     try {
         $stmt = $pdo->prepare("INSERT INTO courses (title, description, created_by) VALUES (?, ?, ?)");
-        $stmt->execute([$title, $description, $_SESSION['user_id']]);
-        echo json_encode(['status' => 'success']);
-    } catch(PDOException $e) {
+        if (!$stmt->execute([$title, $description, $_SESSION['user_id']])) {
+            throw new Exception('Ошибка при выполнении запроса');
+        }
+        
+        $courseId = $pdo->lastInsertId();
+        
+        echo json_encode([
+            'status' => 'success',
+            'course_id' => $courseId,
+            'message' => 'Курс успешно добавлен'
+        ]);
+    } catch(Exception $e) {
+        error_log('Error adding course: ' . $e->getMessage());
         echo json_encode([
             'status' => 'error',
-            'message' => 'Ошибка при добавлении курса: ' . $e->getMessage()
+            'message' => 'Ошибка при добавлении курса'
         ]);
     }
 }
 
 function updateCourse($pdo) {
+    if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+        echo json_encode(['status' => 'error', 'message' => 'Нет прав доступа']);
+        return;
+    }
+
+    if (!isset($_POST['id']) || !isset($_POST['title']) || !isset($_POST['description'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не все данные предоставлены']);
+        return;
+    }
+
     $id = sanitize($_POST['id']);
     $title = sanitize($_POST['title']);
     $description = sanitize($_POST['description']);
     
-    $stmt = $pdo->prepare("UPDATE courses SET title = ?, description = ? WHERE id = ?");
     try {
-        $stmt->execute([$title, $description, $id]);
-        echo json_encode(['status' => 'success']);
-    } catch(PDOException $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Ошибка при обновлении курса']);
+        $stmt = $pdo->prepare("UPDATE courses SET title = ?, description = ? WHERE id = ?");
+        if (!$stmt->execute([$title, $description, $id])) {
+            throw new Exception('Ошибка при выполнении запроса');
+        }
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Курс успешно обновлен'
+        ]);
+    } catch(Exception $e) {
+        error_log('Error updating course: ' . $e->getMessage());
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Ошибка при обновлении курса: ' . $e->getMessage()
+        ]);
     }
 }
 
@@ -1010,26 +1047,19 @@ function getUserProfile($pdo) {
     }
 }
 
-function updateAvatar($pdo) {
-    if (!isset($_SESSION['user_id'])) {
-        echo json_encode(['status' => 'error', 'message' => 'Не авторизован']);
-        return;
-    }
-
-    // Отладочная информация
-    error_log('FILES: ' . print_r($_FILES, true));
+function handleUpdateAvatar() {
+    checkAdmin();
     
     if (!isset($_FILES['avatar'])) {
-        echo json_encode([
-            'status' => 'error', 
-            'message' => 'Файл не найден в запросе'
-        ]);
+        echo json_encode(['status' => 'error', 'message' => 'Файл не найден в запросе']);
         return;
     }
 
-    if ($_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
+    $file = $_FILES['avatar'];
+    
+    if ($file['error'] !== UPLOAD_ERR_OK) {
         $errorMessage = 'Ошибка загрузки файла: ';
-        switch ($_FILES['avatar']['error']) {
+        switch ($file['error']) {
             case UPLOAD_ERR_INI_SIZE:
                 $errorMessage .= 'Превышен размер файла (php.ini)';
                 break;
@@ -1043,14 +1073,13 @@ function updateAvatar($pdo) {
                 $errorMessage .= 'Файл не был загружен';
                 break;
             default:
-                $errorMessage .= 'Код ошибки: ' . $_FILES['avatar']['error'];
+                $errorMessage .= 'Код ошибки: ' . $file['error'];
         }
         echo json_encode(['status' => 'error', 'message' => $errorMessage]);
         return;
     }
 
     try {
-        $file = $_FILES['avatar'];
         $fileName = uniqid() . '_' . basename($file['name']);
         $uploadDir = '../uploads/avatars/';
         $uploadPath = $uploadDir . $fileName;
@@ -1069,7 +1098,8 @@ function updateAvatar($pdo) {
 
         if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
             $avatarUrl = 'uploads/avatars/' . $fileName;
-            $stmt = $pdo->prepare("UPDATE users SET avatar = ? WHERE id = ?");
+            global $db;
+            $stmt = $db->prepare("UPDATE users SET avatar = ? WHERE id = ?");
             $stmt->execute([$avatarUrl, $_SESSION['user_id']]);
 
             echo json_encode([
@@ -1085,6 +1115,68 @@ function updateAvatar($pdo) {
             'status' => 'error', 
             'message' => 'Ошибка при сохранении файла: ' . $e->getMessage()
         ]);
+    }
+}
+
+function handleUpdateCourseImage() {
+    checkAdmin();
+    
+    if (!isset($_FILES['image']) || !isset($_POST['course_id'])) {
+        echo json_encode(['status' => 'error', 'message' => 'Не все данные предоставлены']);
+        return;
+    }
+
+    $courseId = (int)$_POST['course_id'];
+    $file = $_FILES['image'];
+
+    // Проверяем тип файла
+    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!in_array($file['type'], $allowedTypes)) {
+        echo json_encode(['status' => 'error', 'message' => 'Неподдерживаемый тип файла']);
+        return;
+    }
+
+    // Проверяем размер файла (максимум 5MB)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        echo json_encode(['status' => 'error', 'message' => 'Файл слишком большой']);
+        return;
+    }
+
+    // Создаем директорию, если она не существует
+    $uploadDir = '../uploads/courses/';
+    if (!file_exists($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    // Генерируем уникальное имя файла
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = uniqid() . '_' . time() . '.' . $extension;
+    $targetPath = $uploadDir . $filename;
+    $relativePath = 'uploads/courses/' . $filename;
+
+    // Удаляем старое изображение
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT image FROM courses WHERE id = ?");
+    $stmt->execute([$courseId]);
+    $oldImage = $stmt->fetchColumn();
+    
+    if ($oldImage && file_exists('../' . $oldImage)) {
+        unlink('../' . $oldImage);
+    }
+
+    // Загружаем новое изображение
+    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+        // Обновляем путь к изображению в базе данных
+        $stmt = $pdo->prepare("UPDATE courses SET image = ? WHERE id = ?");
+        $stmt->execute([$relativePath, $courseId]);
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Изображение успешно загружено',
+            'image_url' => $relativePath
+        ]);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Ошибка при загрузке файла']);
     }
 }
 

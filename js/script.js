@@ -28,13 +28,13 @@ async function loadCourse() {
     if (response.status === 'success') {
         // Отображаем список уроков
         document.getElementById('lessonsList').innerHTML = response.lessons.map(lesson => `
-                    <a href="#" 
-                       class="list-group-item list-group-item-action ${parseInt(lesson.completed) === 1 ? 'lesson-completed' : ''}"
-                       data-lesson-id="${lesson.id}"
-                       onclick="loadLesson(${lesson.id})">
-                        ${lesson.title}
-                    </a>
-                `).join('');
+            <a href="#" 
+               class="list-group-item list-group-item-action ${parseInt(lesson.completed) === 1 ? 'lesson-completed' : ''}"
+               data-lesson-id="${lesson.id}"
+               onclick="loadLesson(${lesson.id})">
+                ${lesson.title}
+            </a>
+        `).join('');
 
         // Отображаем среднюю оценку, если она есть и пользователь не админ
         const averageGradeBlock = document.getElementById('averageGradeBlock');
@@ -45,16 +45,6 @@ async function loadCourse() {
             averageGradeBlock.classList.remove('d-none');
         } else {
             averageGradeBlock.classList.add('d-none');
-        }
-
-        // Находим первый урок по порядковому номеру
-        const firstLesson = response.lessons.find(lesson => lesson.order_num === 1);
-        if (firstLesson) {
-            // Загружаем первый урок
-            await loadLesson(firstLesson.id);
-        } else if (response.lessons.length > 0) {
-            // Если урока с order_num = 1 нет, загружаем первый из списка
-            await loadLesson(response.lessons[0].id);
         }
     }
 }
@@ -211,24 +201,42 @@ async function loadCourses() {
     if (response.status === 'success') {
         const coursesList = document.getElementById('coursesList');
         coursesList.innerHTML = response.courses.map(course => {
-            const isBlocked = !isAdmin && !groupResponse.group; // Блокируем только для обычных пользователей без группы
+            const isBlocked = !isAdmin && !groupResponse.group;
             return `
             <div class="col-12 col-sm-6 col-lg-4 mb-4">
                 <div class="card h-100" data-course-id="${course.id}">
+                    <div class="card-img-wrapper" style="height: 200px; overflow: hidden;">
+                        ${course.image ? 
+                            `<img src="../${course.image}" class="card-img-top" alt="${course.title}" 
+                                style="height: 100%; width: 100%; object-fit: cover;">` : 
+                            `<div class="card-img-top bg-light d-flex align-items-center justify-content-center h-100">
+                                <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+                            </div>`
+                        }
+                    </div>
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title">${course.title}</h5>
                         <p class="card-text">${course.description}</p>
-                        <div class="progress mb-3 ${isBlocked ? 'disabled' : ''}" ${isBlocked ? 'style="opacity: 0.5; pointer-events: none;"' : ''}>
-                            <div class="progress-bar" role="progressbar" style="width: ${course.progress}%" data-course-id="${course.id}">
-                                ${course.progress}%
+                        <p class="card-text text-muted small">
+                            <i class="bi bi-person-circle"></i> Создал: ${course.created_by_name || 'Администратор'}
+                        </p>
+                        <div class="progress mb-3 ${isBlocked ? 'disabled' : ''}" 
+                             ${isBlocked ? 'style="opacity: 0.5; pointer-events: none;"' : ''}>
+                            <div class="progress-bar" role="progressbar" 
+                                 style="width: ${course.progress || 0}%" 
+                                 data-course-id="${course.id}">
+                                ${course.progress || 0}%
                             </div>
                         </div>
                         ${isBlocked ?
-                    `<div class="alert alert-warning mb-0 mt-auto w-100">Курс заблокирован. Обратитесь к администратору для добавления в группу.</div>` :
-                    `<button class="btn btn-primary w-100 mt-auto" onclick="window.location.href='course.html?id=${course.id}'">
+                            `<div class="alert alert-warning mb-0 mt-auto w-100">
+                                Курс заблокирован. Обратитесь к администратору для добавления в группу.
+                            </div>` :
+                            `<button class="btn btn-primary w-100 mt-auto" 
+                                onclick="window.location.href='course.html?id=${course.id}'">
                                 Начать обучение
                             </button>`
-                }
+                        }
                     </div>
                 </div>
             </div>`;

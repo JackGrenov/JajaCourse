@@ -403,57 +403,101 @@ document.addEventListener('DOMContentLoaded', () => {
     lessonsModal = new bootstrap.Modal(document.getElementById('lessonsModal'));
 
     // Добавляем обработчик формы добавления/редактирования курса
-    document.getElementById('courseForm').addEventListener('submit', async function (e) {
+    document.getElementById('courseForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        // Отключаем кнопку отправки формы, чтобы избежать двойной отправки
-        const submitButton = this.querySelector('button[type="submit"]');
-        submitButton.disabled = true;
-
-        const spinner = submitButton.querySelector('.spinner-border');
-        const btnText = submitButton.querySelector('.btn-text');
-        spinner.classList.remove('d-none');
-        btnText.textContent = 'Сохранение...';
-
-        const courseId = document.getElementById('courseId').value;
-        const title = document.getElementById('courseTitle').value;
-        const description = document.getElementById('courseDescription').value;
-
-        let response;
+        
+        const submitBtn = document.getElementById('submitCourseBtn');
+        const spinner = submitBtn.querySelector('.spinner-border');
+        const btnText = submitBtn.querySelector('.btn-text');
+        
         try {
+            submitBtn.disabled = true;
+            spinner.classList.remove('d-none');
+            btnText.textContent = 'Сохранение...';
+
+            const courseId = document.getElementById('courseId').value;
+            const title = document.getElementById('courseTitle').value;
+            const description = document.getElementById('courseDescription').value;
+            const imageFile = document.getElementById('courseImage').files[0];
+
+            // Сначала сохраняем основные данные курса
+            const courseData = {
+                title: title,
+                description: description
+            };
+
             if (courseId) {
-                response = await Api.request('update_course', {
-                    id: courseId,
-                    title: title,
-                    description: description
-                });
+                courseData.id = courseId;
+                courseData.action = 'update_course';
             } else {
-                response = await Api.request('add_course', {
-                    title: title,
-                    description: description
-                });
+                courseData.action = 'add_course';
             }
+
+            const response = await Api.request(courseData.action, courseData);
 
             if (response.status === 'success') {
-                // Закрываем модальное окно
+                const newCourseId = courseId || response.course_id;
+
+                // Если есть изображение, загружаем его
+                if (imageFile) {
+                    const formData = new FormData();
+                    formData.append('action', 'update_course_image');
+                    formData.append('image', imageFile);
+                    formData.append('course_id', newCourseId);
+
+                    try {
+                        const imageResponse = await fetch('../api/api.php', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const imageData = await imageResponse.json();
+                        
+                        if (imageData.status !== 'success') {
+                            throw new Error(imageData.message || 'Ошибка при загрузке изображения');
+                        }
+                    } catch (error) {
+                        throw new Error('Ошибка при загрузке изображения: ' + (error.message || 'Неизвестная ошибка'));
+                    }
+                }
+
+                // Закрываем модальное окно и обновляем список курсов
                 const modal = bootstrap.Modal.getInstance(document.getElementById('courseModal'));
                 modal.hide();
-
-                // Очищаем форму
                 document.getElementById('courseForm').reset();
-                document.getElementById('courseId').value = '';
-
-                // Обновляем список курсов
+                document.getElementById('courseImagePreview').innerHTML = '';
                 await loadCourses();
+                
+                showNotification('success', 'Курс успешно сохранен');
             } else {
-                alert('Ошибка: ' + response.message);
+                throw new Error(response.message || 'Ошибка при сохранении курса');
             }
         } catch (error) {
-            alert('Произошла ошибка при сохранении курса');
+            console.error('Error:', error);
+            showNotification('error', error.message || 'Произошла ошибка при сохранении курса');
         } finally {
-            // Включаем кнопку обратно
-            submitButton.disabled = false;
+            submitBtn.disabled = false;
             spinner.classList.add('d-none');
             btnText.textContent = 'Сохранить';
+        }
+    });
+
+    // Добавляем предпросмотр изображения
+    document.getElementById('courseImage').addEventListener('change', function(e) {
+        const preview = document.getElementById('courseImagePreview');
+        preview.innerHTML = '';
+        
+        if (this.files && this.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.style.maxWidth = '200px';
+                img.style.maxHeight = '200px';
+                img.classList.add('img-thumbnail');
+                preview.appendChild(img);
+            }
+            reader.readAsDataURL(this.files[0]);
         }
     });
 
